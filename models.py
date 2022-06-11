@@ -146,11 +146,19 @@ class GameElementState:
             f"{[str(item) for item in self.misc]}"
 
 
+class IntakeSide(Enum):
+    '''Represents the side of intake'''
+    LEFT = 0
+    RIGHT = 1
+
+
 @dataclass
 class RobotState:
     '''Represents the current state of a robot'''
     body: Element
     hood: Element
+    left_intake: Element
+    right_intake: Element
     parts: list[Element]
 
     @staticmethod
@@ -164,6 +172,8 @@ class RobotState:
             elements.append(Element.from_json(raw_object))
         body = None
         hood = None
+        left_intake = None
+        right_intake = None
         parts = []
         for element in elements:
             if element.name is None:
@@ -172,9 +182,19 @@ class RobotState:
                 body = element
             elif 'Indicator' in element.name:
                 hood = element
+            elif 'IntakeFlap1' in element.name:
+                left_intake = element
+            elif 'IntakeFlap2' in element.name:
+                right_intake = element
             else:
                 parts.append(element)
-        return RobotState(body, hood, parts)
+        return RobotState(body, hood, left_intake, right_intake, parts)
+
+    def intake_state(self, side: IntakeSide) -> bool:
+        '''Returns whether the intake is up'''
+        if side is IntakeSide.LEFT:
+            return self.left_intake.local_position.y > 0.3
+        return self.right_intake.local_position.y > 0.3
 
     def __str__(self) -> str:
         return f"Robot @ {self.body.global_position}"

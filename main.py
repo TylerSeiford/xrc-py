@@ -2,7 +2,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import Element, GameElementState, RobotState, GameState, Controls, GamepadState, Gamepad
+from models import Element, GameElementState, IntakeSide, RobotState, GameState, Controls, GamepadState, Gamepad
 
 
 
@@ -10,7 +10,7 @@ FPS: float = 100
 
 
 
-def nearest_ball(robot: RobotState, balls: list[Element]) -> float:
+def nearest_ball(robot: RobotState, balls: list[Element]) -> tuple[float, IntakeSide]:
     '''Find the angle to the nearest ball'''
     nearest_distance = float('inf')
     nearest_vector = None
@@ -30,9 +30,14 @@ def nearest_ball(robot: RobotState, balls: list[Element]) -> float:
         angle -= 360
 
     # Wrap angle for dual intakes
-    if angle > 90 or angle < -90:
+    intake = IntakeSide.RIGHT
+    if angle > 90:
         angle -= 180
-    return angle
+        intake = IntakeSide.LEFT
+    if angle < -90:
+        angle += 180
+        intake = IntakeSide.LEFT
+    return angle, intake
 
 
 turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
@@ -48,7 +53,7 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         angle_to_hub += 360
     elif angle_to_hub > 180:
         angle_to_hub -= 360
-    angle_to_nearest_ball = nearest_ball(robot, game.blue_cargo)
+    angle_to_nearest_ball, nearest_intake = nearest_ball(robot, game.blue_cargo)
 
     # Automate hood angle control (based on Eliot's code)
     HOOD_ANGLES = [
