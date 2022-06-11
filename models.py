@@ -199,8 +199,8 @@ class Controls:
     rotate: float
     forward_reverse: float
     strafe: float
-    climber_a: float
-    climber_b: float
+    climber_rotate: float
+    climber_forward: float
     precision: float = 0.3
 
     def write(self) -> None:
@@ -222,8 +222,8 @@ class Controls:
             file.write(f"right_x={self.rotate}\n")
             file.write(f"left_y={self.forward_reverse}\n")
             file.write(f"left_x={self.strafe}\n")
-            file.write(f"trigger_l={self.climber_a}\n")
-            file.write(f"trigger_r={self.climber_b}\n")
+            file.write(f"trigger_l={self.climber_rotate}\n")
+            file.write(f"trigger_r={self.climber_forward}\n")
             file.write(f"precision={self.precision}\n")
 
 
@@ -265,6 +265,39 @@ class GameState:
         return f"{self.phase} {self.time_left}"
 
 
+@dataclass
+class GamepadState:
+    '''Represents the current state of the gamepad'''
+    a: bool
+    b: bool
+    x: bool
+    y: bool
+    dpad_down: bool
+    dpad_up: bool
+    dpad_left: bool
+    dpad_right: bool
+    bumper_right: bool
+    bumper_left: bool
+    restart: bool
+    stop: bool
+    right_y: float
+    right_x: float
+    left_y: float
+    left_x: float
+    trigger_left: float
+    trigger_right: float
+
+    def default(self) -> Controls:
+        '''Returns the default controls'''
+        return Controls(self.a, self.b, self.x, self.y,
+                self.dpad_down, self.dpad_up, self.dpad_left, self.dpad_right,
+                self.bumper_left, self.bumper_right,
+                self.stop, self.restart,
+                self.right_y, self.right_x,
+                self.left_y, self.left_x,
+                self.trigger_left, self.trigger_right)
+
+
 class Gamepad:
     '''Represents the gamepad'''
     def __init__(self, stick: int = 0):
@@ -272,30 +305,27 @@ class Gamepad:
         pygame.joystick.init()
         self.__joystick = pygame.joystick.Joystick(stick)
 
-    def read(self) -> Controls:
-        '''Reads the current controls from a joystick'''
+    def read(self) -> GamepadState:
+        '''Reads the current state from a joystick'''
         pygame.event.pump()
-        a = self.__joystick.get_button(0)
-        b = self.__joystick.get_button(1)
-        x = self.__joystick.get_button(2)
-        y = self.__joystick.get_button(3)
         dpad = self.__joystick.get_hat(0)
-        dpad_down = dpad[1] == -1
-        dpad_up = dpad[1] == 1
-        dpad_left = dpad[0] == -1
-        dpad_right = dpad[0] == 1
-        bumper_left = self.__joystick.get_button(4)
-        bumper_right = self.__joystick.get_button(5)
-        restart = self.__joystick.get_button(8)
-        stop = self.__joystick.get_button(7)
-        right_y = self.__joystick.get_axis(3)
-        right_x = self.__joystick.get_axis(2)
-        left_y = self.__joystick.get_axis(1)
-        left_x = self.__joystick.get_axis(0)
-        trigger_left = (self.__joystick.get_axis(4) + 1) / 2
-        trigger_right = (self.__joystick.get_axis(5) + 1) / 2
-        return Controls(a, b, x, y,
-                dpad_down, dpad_up, dpad_left, dpad_right,
-                bumper_left, bumper_right, stop, restart,
-                right_y, right_x, left_y, left_x,
-                trigger_left, trigger_right)
+        return GamepadState(
+            self.__joystick.get_button(0),
+            self.__joystick.get_button(1),
+            self.__joystick.get_button(2),
+            self.__joystick.get_button(3),
+            dpad[1] == -1,
+            dpad[1] == 1,
+            dpad[0] == -1,
+            dpad[0] == 1,
+            self.__joystick.get_button(5),
+            self.__joystick.get_button(4),
+            self.__joystick.get_button(8),
+            self.__joystick.get_button(7),
+            self.__joystick.get_axis(3),
+            self.__joystick.get_axis(2),
+            self.__joystick.get_axis(1),
+            self.__joystick.get_axis(0),
+            (self.__joystick.get_axis(4) + 1) / 2,
+            (self.__joystick.get_axis(5) + 1) / 2
+        )
