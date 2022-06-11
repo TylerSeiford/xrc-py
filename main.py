@@ -2,7 +2,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import GameElementState, RobotState, GameState, Controls, GamepadState, Gamepad
+from models import Element, GameElementState, RobotState, GameState, Controls, GamepadState, Gamepad
 
 
 
@@ -10,8 +10,33 @@ FPS: float = 100
 
 
 
+def nearest_ball(robot: RobotState, balls: list[Element]) -> float:
+    '''Find the angle to the nearest ball'''
+    nearest_distance = float('inf')
+    nearest_vector = None
+    for ball in balls:
+        difference = robot.body.global_position - ball.global_position
+        distance = math.hypot(difference.x, difference.y, difference.z)
+        if distance < 0.375:
+            pass # Ball is in robot
+        elif distance < nearest_distance:
+            nearest_distance = distance
+            nearest_vector = difference
+    angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
+    angle = angle - robot.body.global_rotation.y
+    if angle < -180:
+        angle += 360
+    elif angle > 180:
+        angle -= 360
+
+    # Wrap angle for dual intakes
+    if angle > 90 or angle < -90:
+        angle -= 180
+    return angle
+
+
 turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
-def control(robot: RobotState, gamepad_input: GamepadState) -> Controls:
+def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadState) -> Controls:
     '''Semi-automated control'''
     # Find general info
     distance_to_hub = math.hypot(robot.body.global_position.x,
@@ -21,6 +46,9 @@ def control(robot: RobotState, gamepad_input: GamepadState) -> Controls:
     angle_to_hub = angle_from_hub - robot.body.global_rotation.y + 90
     if angle_to_hub < -180:
         angle_to_hub += 360
+    elif angle_to_hub > 180:
+        angle_to_hub -= 360
+    angle_to_nearest_ball = nearest_ball(robot, game.blue_cargo)
 
     # Automate hood angle control (based on Eliot's code)
     HOOD_ANGLES = [
@@ -54,6 +82,8 @@ def control(robot: RobotState, gamepad_input: GamepadState) -> Controls:
     rotation = gamepad_input.right_x
     if gamepad_input.bumper_right:
         rotation = turn_pid(angle_to_hub)
+    elif gamepad_input.bumper_left:
+        rotation = turn_pid(angle_to_nearest_ball)
 
     return Controls(
         gamepad_input.a, gamepad_input.b, gamepad_input.x, gamepad_input.y,
@@ -84,6 +114,6 @@ if __name__ == '__main__':
                 continue # Error reading file, try again
 
             # For default control, use: gamepad.read().default().write()
-            controls = control(robot_state, gamepad.read())
+            controls = control(robot_state, element_state, gamepad.read())
             controls.write()
         time.sleep(max((1 / FPS) - (time.time() - start), 0))

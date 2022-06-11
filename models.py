@@ -21,7 +21,7 @@ class Vector:
         return Vector(data[0], data[1], data[2])
 
     def __str__(self) -> str:
-        return f"<{self.x}, {self.y}, {self.z}>"
+        return f"<{self.x:.3f}, {self.y:.3f}, {self.z:.3f}>"
 
     def __add__(self, other: 'Vector') -> 'Vector':
         return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
