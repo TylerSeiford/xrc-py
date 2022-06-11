@@ -45,8 +45,10 @@ class Element:
     identifier: int
     element_type: int
     name: str
-    position: Vector
-    rotation: Vector
+    global_position: Vector
+    global_rotation: Vector
+    local_position: Vector
+    local_rotation: Vector
     velocity: Vector | None
     angular_velocity: Vector | None
 
@@ -56,8 +58,10 @@ class Element:
         identifier = None
         element_type = None
         name = None
-        position = None
-        rotation = None
+        global_position = None
+        global_rotation = None
+        local_position = None
+        local_rotation = None
         velocity = None
         angular_velocity = None
         try:
@@ -73,11 +77,19 @@ class Element:
         except KeyError:
             pass
         try:
-            position = Vector.from_json(data['global pos'])
+            global_position = Vector.from_json(data['global pos'])
         except KeyError:
             pass
         try:
-            rotation = Vector.from_json(data['global rot'])
+            global_rotation = Vector.from_json(data['global rot'])
+        except KeyError:
+            pass
+        try:
+            local_position = Vector.from_json(data['local pos'])
+        except KeyError:
+            pass
+        try:
+            local_rotation = Vector.from_json(data['local rot'])
         except KeyError:
             pass
         try:
@@ -89,10 +101,11 @@ class Element:
         except KeyError:
             pass
         return Element(identifier, element_type, name,
-                position, rotation, velocity, angular_velocity)
+                global_position, global_rotation, local_position, local_rotation,
+                velocity, angular_velocity)
 
     def __str__(self) -> str:
-        return f"{self.name} @ {self.position}"
+        return f"{self.name} @ {self.global_position}"
 
 
 @dataclass
@@ -137,6 +150,7 @@ class GameElementState:
 class RobotState:
     '''Represents the current state of a robot'''
     body: Element
+    hood: Element
     parts: list[Element]
 
     @staticmethod
@@ -149,18 +163,21 @@ class RobotState:
         for raw_object in raw['myrobot']:
             elements.append(Element.from_json(raw_object))
         body = None
+        hood = None
         parts = []
         for element in elements:
             if element.name is None:
                 parts.append(element)
             elif 'Body' in element.name:
                 body = element
+            elif 'Indicator' in element.name:
+                hood = element
             else:
                 parts.append(element)
-        return RobotState(body, parts)
+        return RobotState(body, hood, parts)
 
     def __str__(self) -> str:
-        return f"Robot @ {self.body.position}"
+        return f"Robot @ {self.body.global_position}"
 
 
 @dataclass
@@ -275,8 +292,8 @@ class Gamepad:
         right_x = self.__joystick.get_axis(2)
         left_y = self.__joystick.get_axis(1)
         left_x = self.__joystick.get_axis(0)
-        trigger_left = 0
-        trigger_right = 0
+        trigger_left = (self.__joystick.get_axis(4) + 1) / 2
+        trigger_right = (self.__joystick.get_axis(5) + 1) / 2
         return Controls(a, b, x, y,
                 dpad_down, dpad_up, dpad_left, dpad_right,
                 bumper_left, bumper_right, stop, restart,
