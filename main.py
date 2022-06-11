@@ -10,15 +10,17 @@ FPS: float = 100
 
 
 
-def nearest_ball(robot: RobotState, balls: list[Element]) -> tuple[float, IntakeSide]:
-    '''Find the angle to the nearest ball'''
+def ball_search(robot: RobotState, balls: list[Element]) -> tuple[float, float, IntakeSide, int]:
+    '''Find the angle & distance to nearest ball, nearest intake, and number of balls in robot'''
     nearest_distance = float('inf')
     nearest_vector = None
+    balls_in_bot = 0
     for ball in balls:
         difference = robot.body.global_position - ball.global_position
         distance = math.hypot(difference.x, difference.y, difference.z)
         if distance < 0.375:
-            pass # Ball is in robot
+            # Ball is in robot
+            balls_in_bot += 1
         elif difference.y < -0.5:
             pass # Ball is still too high
         elif distance < nearest_distance:
@@ -40,7 +42,7 @@ def nearest_ball(robot: RobotState, balls: list[Element]) -> tuple[float, Intake
         intake = IntakeSide.LEFT
     else:
         intake = IntakeSide.RIGHT
-    return angle, intake
+    return angle, nearest_distance, intake, balls_in_bot
 
 
 turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
@@ -56,7 +58,8 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         angle_to_hub += 360
     elif angle_to_hub > 180:
         angle_to_hub -= 360
-    angle_to_nearest_ball, nearest_intake = nearest_ball(robot, game.blue_cargo)
+    (angle_to_nearest_ball, distance_to_nearest_ball,
+        nearest_intake, balls_in_robot) = ball_search(robot, game.blue_cargo)
 
     # Automate hood angle control (based on Eliot's code)
     HOOD_ANGLES = [
@@ -96,7 +99,7 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
         toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
     elif gamepad_input.bumper_left:
-        # Turn to ball with nearest intake down, other intake up
+        # Turn to ball, put nearby intake down and put far intake up
         rotation = turn_pid(angle_to_nearest_ball)
         toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
                 IntakeSide.LEFT == nearest_intake)
@@ -107,7 +110,7 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         gamepad_input.a, toggle_right_intake, toggle_left_intake, gamepad_input.y,
         aim_down, aim_up,
         gamepad_input.dpad_left, gamepad_input.dpad_right,
-        False, False, False, False,
+        False, False, gamepad_input.start, gamepad_input.back,
         gamepad_input.right_y, rotation,
         gamepad_input.left_y, gamepad_input.left_x,
         gamepad_input.trigger_left, gamepad_input.trigger_right

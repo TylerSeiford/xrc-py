@@ -252,7 +252,8 @@ class GamePhase(Enum):
     READY = 0
     AUTO = 1
     TELEOP = 2
-    FINISHED = 3
+    ENDGAME = 3
+    FINISHED = 4
 
     @staticmethod
     def from_str(string: str) -> 'GamePhase':
@@ -261,6 +262,7 @@ class GamePhase(Enum):
             case 'READY': return GamePhase.READY
             case 'AUTO': return GamePhase.AUTO
             case 'TELEOP': return GamePhase.TELEOP
+            case 'ENDGAME': return GamePhase.ENDGAME
             case 'FINISHED': return GamePhase.FINISHED
             case _: raise ValueError(f"{string} is not a valid GamePhase")
 
@@ -298,8 +300,8 @@ class GamepadState:
     dpad_right: bool
     bumper_right: bool
     bumper_left: bool
-    restart: bool
-    stop: bool
+    back: bool
+    start: bool
     right_y: float
     right_x: float
     left_y: float
@@ -312,7 +314,7 @@ class GamepadState:
         return Controls(self.a, self.b, self.x, self.y,
                 self.dpad_down, self.dpad_up, self.dpad_left, self.dpad_right,
                 self.bumper_left, self.bumper_right,
-                self.stop, self.restart,
+                self.start, self.back,
                 self.right_y, self.right_x,
                 self.left_y, self.left_x,
                 self.trigger_left, self.trigger_right)
@@ -330,22 +332,22 @@ class Gamepad:
         pygame.event.pump()
         dpad = self.__joystick.get_hat(0)
         return GamepadState(
-            self.__joystick.get_button(0),
-            self.__joystick.get_button(1),
-            self.__joystick.get_button(2),
-            self.__joystick.get_button(3),
-            dpad[1] == -1,
-            dpad[1] == 1,
-            dpad[0] == -1,
-            dpad[0] == 1,
-            self.__joystick.get_button(5),
-            self.__joystick.get_button(4),
-            self.__joystick.get_button(8),
-            self.__joystick.get_button(7),
-            self.__joystick.get_axis(3),
-            self.__joystick.get_axis(2),
-            self.__joystick.get_axis(1),
-            self.__joystick.get_axis(0),
-            (self.__joystick.get_axis(4) + 1) / 2,
-            (self.__joystick.get_axis(5) + 1) / 2
+            a=self.__joystick.get_button(0),
+            b=self.__joystick.get_button(1),
+            x=self.__joystick.get_button(2),
+            y=self.__joystick.get_button(3),
+            dpad_down=dpad[1] == -1,
+            dpad_up=dpad[1] == 1,
+            dpad_left=dpad[0] == -1,
+            dpad_right=dpad[0] == 1,
+            bumper_right=self.__joystick.get_button(5),
+            bumper_left=self.__joystick.get_button(4),
+            back=self.__joystick.get_button(6),
+            start=self.__joystick.get_button(7),
+            right_y=self.__joystick.get_axis(3),
+            right_x=self.__joystick.get_axis(2),
+            left_y=self.__joystick.get_axis(1),
+            left_x=self.__joystick.get_axis(0),
+            trigger_left=(self.__joystick.get_axis(4) + 1) / 2,
+            trigger_right=(self.__joystick.get_axis(5) + 1) / 2
         )
