@@ -19,6 +19,8 @@ def nearest_ball(robot: RobotState, balls: list[Element]) -> tuple[float, Intake
         distance = math.hypot(difference.x, difference.y, difference.z)
         if distance < 0.375:
             pass # Ball is in robot
+        elif difference.y < -0.5:
+            pass # Ball is still too high
         elif distance < nearest_distance:
             nearest_distance = distance
             nearest_vector = difference
@@ -30,13 +32,14 @@ def nearest_ball(robot: RobotState, balls: list[Element]) -> tuple[float, Intake
         angle -= 360
 
     # Wrap angle for dual intakes
-    intake = IntakeSide.RIGHT
     if angle > 90:
         angle -= 180
         intake = IntakeSide.LEFT
-    if angle < -90:
+    elif angle < -90:
         angle += 180
         intake = IntakeSide.LEFT
+    else:
+        intake = IntakeSide.RIGHT
     return angle, intake
 
 
@@ -83,15 +86,25 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         aim_up = False
         aim_down = False
 
-    # Automate robot angle control
+    # Automate robot angle control and intake control
     rotation = gamepad_input.right_x
+    toggle_left_intake = gamepad_input.x
+    toggle_right_intake = gamepad_input.b
     if gamepad_input.bumper_right:
+        # Turn to hub with both intakes up
         rotation = turn_pid(angle_to_hub)
+        toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
+        toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
     elif gamepad_input.bumper_left:
+        # Turn to ball with nearest intake down, other intake up
         rotation = turn_pid(angle_to_nearest_ball)
+        toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
+                IntakeSide.LEFT == nearest_intake)
+        toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
+                IntakeSide.RIGHT == nearest_intake)
 
     return Controls(
-        gamepad_input.a, gamepad_input.b, gamepad_input.x, gamepad_input.y,
+        gamepad_input.a, toggle_right_intake, toggle_left_intake, gamepad_input.y,
         aim_down, aim_up,
         gamepad_input.dpad_left, gamepad_input.dpad_right,
         False, False, False, False,

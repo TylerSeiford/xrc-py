@@ -190,7 +190,7 @@ class RobotState:
                 parts.append(element)
         return RobotState(body, hood, left_intake, right_intake, parts)
 
-    def intake_state(self, side: IntakeSide) -> bool:
+    def intake_up(self, side: IntakeSide) -> bool:
         '''Returns whether the intake is up'''
         if side is IntakeSide.LEFT:
             return self.left_intake.local_position.y > 0.3
