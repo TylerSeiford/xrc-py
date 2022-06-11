@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Misc
+Controls.txt
+GAME_STATE.txt
+GameElements.txt
+myRobot.txt
+reference/
