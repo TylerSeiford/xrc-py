@@ -62,7 +62,7 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
     (angle_to_nearest_ball, distance_to_nearest_ball,
         nearest_intake, balls_in_robot) = ball_search(robot, game.blue_cargo)
 
-    # Automate hood angle control (based on Eliot's code)
+    # Automate hood angle control (based on Eliot's hood angles)
     HOOD_ANGLES = [
         180, 170, 162, 155, 147,
         140, 132, 126, 120, 115,
@@ -80,10 +80,9 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         hood_angle = (hood_angle - 450) * -1
     elif hood_angle <= 90:
         hood_angle = (hood_angle - 90) * -1
-    # Use PID control to setup the hood angle
+    # Use PID control for the hood angle
     angle_difference = target_hood_angle - hood_angle
     angle_output = hood_pid(angle_difference)
-    print(f"{angle_difference:.2f}\t{angle_output:.2f}")
     if angle_output < 0:
         aim_up = True
         aim_down = False

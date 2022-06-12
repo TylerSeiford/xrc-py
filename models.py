@@ -326,6 +326,7 @@ class Gamepad:
         pygame.init()
         pygame.joystick.init()
         self.__joystick = pygame.joystick.Joystick(stick)
+        print(f"Detected {self.__joystick.get_name()}")
 
     def read(self) -> GamepadState:
         '''Reads the current state from a joystick'''
