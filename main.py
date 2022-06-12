@@ -8,7 +8,7 @@ from models import Element, GameElementState, IntakeSide, RobotState, GamePhase,
 
 
 FPS: float = 100
-
+THREE_BALL_TIME_LIMIT: float = 1.625
 
 
 class MainCommand(Command):
@@ -21,7 +21,7 @@ class MainCommand(Command):
     def __init__(self):
         super().__init__()
         self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
-        self.__mode = MainCommand.Mode.TWO_BALL
+        self.__mode = MainCommand.Mode.THREE_BALL
         self.__three_ball_start = None
 
     @staticmethod
@@ -84,7 +84,7 @@ class MainCommand(Command):
             if balls_in_robot < 3:
                 self.__three_ball_start = None
             else:
-                time_left = 3 - (time.time() - self.__three_ball_start)
+                time_left = THREE_BALL_TIME_LIMIT - (time.time() - self.__three_ball_start)
                 if time_left < 0.25:
                     # Shoot balls to avoid penalty
                     controls.shoot = True
