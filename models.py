@@ -352,3 +352,16 @@ class Gamepad:
             trigger_left=(self.__joystick.get_axis(4) + 1) / 2,
             trigger_right=(self.__joystick.get_axis(5) + 1) / 2
         )
+
+
+
+class Command:
+    '''Represents a command to modify the controls for the robot'''
+    def __init__(self):
+        pass
+
+    def execute(self,
+            robot: RobotState, game: GameElementState, gamepad_input: GamepadState,
+            controls: Controls) -> Controls:
+        '''Executes the command'''
+        return controls
