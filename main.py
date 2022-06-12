@@ -3,7 +3,7 @@ import math
 import time
 from enum import Enum
 from simple_pid import PID
-from models import Element, GameElementState, IntakeSide, RobotState, GameState, Controls, GamepadState, Gamepad, Command
+from models import Element, GameElementState, IntakeSide, RobotState, GamePhase, GameState, Controls, GamepadState, Gamepad, Command
 
 
 
@@ -20,7 +20,7 @@ class MainCommand(Command):
 
     def __init__(self):
         super().__init__()
-        self.__turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
+        self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
         self.__mode = MainCommand.Mode.TWO_BALL
         self.__three_ball_start = None
 
@@ -61,7 +61,8 @@ class MainCommand(Command):
         return angle, nearest_distance, intake, balls_in_bot
 
     def execute(self,
-            robot: RobotState, game: GameElementState, gamepad_input: GamepadState,
+            robot: RobotState, elements: GameElementState,
+            game: GameState, gamepad_input: GamepadState,
             controls: Controls) -> Controls:
         '''Execute'''
         # Gather data
@@ -73,7 +74,7 @@ class MainCommand(Command):
         elif angle_to_hub > 180:
             angle_to_hub -= 360
         (angle_to_nearest_ball, distance_to_nearest_ball,
-            nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, game.blue_cargo)
+            nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, elements.blue_cargo)
 
         # Update ball data
         if self.__three_ball_start is None:
@@ -102,14 +103,14 @@ class MainCommand(Command):
         toggle_right_intake = gamepad_input.b
         if gamepad_input.bumper_right:
             # Turn to hub
-            rotation = self.__turn_pid(angle_to_hub)
+            rotation = self.__pid(angle_to_hub)
             if self.__mode == MainCommand.Mode.TWO_BALL:
                 # with both intakes up in two ball mode
                 toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
                 toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
         elif gamepad_input.bumper_left:
             # Turn to ball
-            rotation = self.__turn_pid(angle_to_nearest_ball)
+            rotation = self.__pid(angle_to_nearest_ball)
             if self.__mode == MainCommand.Mode.TWO_BALL:
                 # put nearby intake down and put far intake up in two ball mode
                 toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
@@ -132,10 +133,11 @@ class HoodCommand(Command):
     '''Automated control of the hood based on Eliot's angles'''
     def __init__(self):
         super().__init__()
-        self.__hood_pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
+        self.__pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 
     def execute(self,
-            robot: RobotState, game: GameElementState, gamepad_input: GamepadState,
+            robot: RobotState, elements: GameElementState,
+            game: GameState, gamepad_input: GamepadState,
             controls: Controls) -> Controls:
         '''Execute'''
         HOOD_ANGLES = [
@@ -159,7 +161,7 @@ class HoodCommand(Command):
             hood_angle = (hood_angle - 90) * -1
         # Use PID control for the hood angle
         angle_difference = target_hood_angle - hood_angle
-        angle_output = self.__hood_pid(angle_difference)
+        angle_output = self.__pid(angle_difference)
 
         controls.aim_up = angle_output < 0
         controls.aim_down = angle_output > 0
@@ -169,11 +171,51 @@ class HoodCommand(Command):
         return controls
 
 
+class ClimberCommand(Command):
+    '''Automated control of the climber'''
+    def __init__(self):
+        super().__init__()
+        self.__pid = PID(-0.050, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
+
+    def execute(self,
+            robot: RobotState, elements: GameElementState,
+            game: GameState, gamepad_input: GamepadState,
+            controls: Controls) -> Controls:
+        '''Execute'''
+
+        # Extend arms when in hangar during endgame
+        if (robot.body.global_position.x > 1.8 and robot.body.global_position.z > 6.0
+                and (game.phase == GamePhase.ENDGAME or game.phase == GamePhase.FINISHED)):
+            controls.climber_extend = True
+            target_angle = 65
+        else:
+            # Keep arms retracted
+            target_angle = 0
+
+        # Control arm angle
+        if controls.climber_forward < 0.5 and controls.climber_reverse < 0.5:
+            hook_angle = robot.climber_hook.local_rotation.z
+            if hook_angle > 180:
+                hook_angle -= 360
+            if hook_angle < -90:
+                hook_angle += 180
+            elif hook_angle > 90:
+                hook_angle -= 180
+            error = target_angle - hook_angle
+            control_output = self.__pid(error)
+            if control_output > 0:
+                controls.climber_forward = control_output
+            elif control_output < 0:
+                controls.climber_reverse = abs(control_output)
+
+        return controls
+
 
 if __name__ == '__main__':
     gamepad = Gamepad()
     main_command = MainCommand()
     hood_command = HoodCommand()
+    climber_command = ClimberCommand()
 
     while True:
         start = time.time()
@@ -192,8 +234,16 @@ if __name__ == '__main__':
             gamepad_state = gamepad.read()
             control_outputs = gamepad_state.default()
             control_outputs = main_command.execute(
-                    robot_state, element_state, gamepad_state, control_outputs)
+                    robot_state, element_state,
+                    game_state, gamepad_state,
+                    control_outputs)
             control_outputs = hood_command.execute(
-                    robot_state, element_state, gamepad_state, control_outputs)
+                    robot_state, element_state,
+                    game_state, gamepad_state,
+                    control_outputs)
+            control_outputs = climber_command.execute(
+                    robot_state, element_state,
+                    game_state, gamepad_state,
+                    control_outputs)
             control_outputs.write()
         time.sleep(max((1 / FPS) - (time.time() - start), 0))
