@@ -34,7 +34,7 @@ class MainCommand(Command):
         for ball in balls:
             difference = robot.body.global_position - ball.global_position
             distance = math.hypot(difference.x, difference.y, difference.z)
-            if distance < 0.375:
+            if distance < 0.4:
                 # Ball is in robot
                 balls_in_bot += 1
             elif difference.y < -0.5:
