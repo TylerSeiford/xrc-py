@@ -232,8 +232,8 @@ class Controls:
             file.write(f"y={1 if self.shoot else 0}\n")
             file.write(f"dpad_down={1 if self.aim_down else 0}\n")
             file.write(f"dpad_up={1 if self.aim_up else 0}\n")
-            file.write(f"dpad_left={1 if self.climber_extend else 0}\n")
-            file.write(f"dpad_right={1 if self.climber_retract else 0}\n")
+            file.write(f"dpad_left={1 if self.climber_retract else 0}\n")
+            file.write(f"dpad_right={1 if self.climber_extend else 0}\n")
             file.write(f"bumper_l={1 if self.precision_left else 0}\n")
             file.write(f"bumper_r={1 if self.precision_right else 0}\n")
             file.write(f"stop={1 if self.stop else 0}\n")
@@ -312,7 +312,7 @@ class GamepadState:
     def default(self) -> Controls:
         '''Returns the default controls'''
         return Controls(self.a, self.b, self.x, self.y,
-                self.dpad_down, self.dpad_up, self.dpad_left, self.dpad_right,
+                self.dpad_down, self.dpad_up, self.dpad_right, self.dpad_left,
                 self.bumper_left, self.bumper_right,
                 self.start, self.back,
                 self.right_y, self.right_x,
