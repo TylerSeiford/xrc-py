@@ -110,7 +110,7 @@ class HoodCommand(Command):
         ]
         distance_to_hub = math.hypot(robot.body.global_position.x,
             robot.body.global_position.z)
-        hood_index = int((distance_to_hub - 1.3) * 10)
+        hood_index = int((distance_to_hub - 1.0) * 10)
         hood_index = min(max(hood_index, 0), 30)
         target_hood_angle = HOOD_ANGLES[hood_index]
         hood_angle = robot.hood.local_rotation.x
