@@ -159,8 +159,10 @@ class RobotState:
     hood: Element
     left_intake: Element
     right_intake: Element
-    climber_arm: Element
-    climber_hook: Element
+    climber_arm_1: Element
+    climber_arm_2: Element
+    climber_hook_1: Element
+    climber_hook_2: Element
     parts: list[Element]
 
     @staticmethod
@@ -176,8 +178,10 @@ class RobotState:
         hood = None
         left_intake = None
         right_intake = None
-        climber_arm = None
-        climber_hook = None
+        climber_arm_1 = None
+        climber_arm_2 = None
+        climber_hook_1 = None
+        climber_hook_2 = None
         parts = []
         for element in elements:
             if element.name is None:
@@ -191,12 +195,22 @@ class RobotState:
             elif 'IntakeFlap2' in element.name:
                 right_intake = element
             elif 'arm1' in element.name:
-                climber_arm = element
+                climber_arm_1 = element
+            elif 'arm2' in element.name:
+                climber_arm_2 = element
             elif 'Hook1' in element.name:
-                climber_hook = element
+                climber_hook_1 = element
+            elif 'Hook2' in element.name:
+                climber_hook_2 = element
             else:
                 parts.append(element)
-        return RobotState(body, hood, left_intake, right_intake, climber_arm, climber_hook, parts)
+        return RobotState(
+            body, hood,
+            left_intake, right_intake,
+            climber_arm_1, climber_arm_2,
+            climber_hook_1, climber_hook_2,
+            parts
+        )
 
     def intake_up(self, side: IntakeSide) -> bool:
         '''Returns whether the intake is up'''
