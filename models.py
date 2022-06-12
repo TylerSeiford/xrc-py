@@ -193,8 +193,8 @@ class RobotState:
     def intake_up(self, side: IntakeSide) -> bool:
         '''Returns whether the intake is up'''
         if side is IntakeSide.LEFT:
-            return self.left_intake.local_position.y > 0.3
-        return self.right_intake.local_position.y > 0.3
+            return self.left_intake.local_position.y > 0.45
+        return self.right_intake.local_position.y > 0.45
 
     def __str__(self) -> str:
         return f"Robot @ {self.body.global_position}"
