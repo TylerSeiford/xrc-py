@@ -200,7 +200,7 @@ class ClimberCommand(Command):
             else:
                 if robot.body.global_position.y > 0.625:
                     # Once up, hold angle
-                    target_angle = -10
+                    target_angle = 70
                 hook_angle = robot.climber_hook.local_rotation.z
                 if hook_angle > 180:
                     hook_angle -= 360
