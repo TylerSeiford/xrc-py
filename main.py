@@ -73,8 +73,8 @@ class MainCommand(Command):
         if gamepad_input.bumper_right:
             # Turn to hub with both intakes up
             rotation = self.__turn_pid(angle_to_hub)
-            toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
-            toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
+       #     toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
+         #   toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
         elif gamepad_input.bumper_left:
             # Turn to ball, put nearby intake down and put far intake up
             rotation = self.__turn_pid(angle_to_nearest_ball)
