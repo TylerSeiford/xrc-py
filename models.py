@@ -159,6 +159,8 @@ class RobotState:
     hood: Element
     left_intake: Element
     right_intake: Element
+    climber_arm: Element
+    climber_hook: Element
     parts: list[Element]
 
     @staticmethod
@@ -174,6 +176,8 @@ class RobotState:
         hood = None
         left_intake = None
         right_intake = None
+        climber_arm = None
+        climber_hook = None
         parts = []
         for element in elements:
             if element.name is None:
@@ -186,9 +190,13 @@ class RobotState:
                 left_intake = element
             elif 'IntakeFlap2' in element.name:
                 right_intake = element
+            elif 'arm1' in element.name:
+                climber_arm = element
+            elif 'Hook1' in element.name:
+                climber_hook = element
             else:
                 parts.append(element)
-        return RobotState(body, hood, left_intake, right_intake, parts)
+        return RobotState(body, hood, left_intake, right_intake, climber_arm, climber_hook, parts)
 
     def intake_up(self, side: IntakeSide) -> bool:
         '''Returns whether the intake is up'''
@@ -219,7 +227,7 @@ class Controls:
     rotate: float
     forward_reverse: float
     strafe: float
-    climber_rotate: float
+    climber_reverse: float
     climber_forward: float
     precision: float = 0.3
 
@@ -242,7 +250,7 @@ class Controls:
             file.write(f"right_x={self.rotate}\n")
             file.write(f"left_y={self.forward_reverse}\n")
             file.write(f"left_x={self.strafe}\n")
-            file.write(f"trigger_l={self.climber_rotate}\n")
+            file.write(f"trigger_l={self.climber_reverse}\n")
             file.write(f"trigger_r={self.climber_forward}\n")
             file.write(f"precision={self.precision}\n")
 
@@ -361,7 +369,8 @@ class Command:
         pass
 
     def execute(self,
-            robot: RobotState, game: GameElementState, gamepad_input: GamepadState,
+            robot: RobotState, elements: GameElementState,
+            game: GameState, gamepad_input: GamepadState,
             controls: Controls) -> Controls:
         '''Executes the command'''
         return controls
