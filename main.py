@@ -22,6 +22,7 @@ class MainCommand(Command):
         super().__init__()
         self.__turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
         self.__mode = MainCommand.Mode.TWO_BALL
+        self.__three_ball_start = None
 
     @staticmethod
     def __ball_search(robot: RobotState, balls: list[Element]
@@ -73,6 +74,19 @@ class MainCommand(Command):
             angle_to_hub -= 360
         (angle_to_nearest_ball, distance_to_nearest_ball,
             nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, game.blue_cargo)
+
+        # Update ball data
+        if self.__three_ball_start is None:
+            if balls_in_robot >= 3:
+                self.__three_ball_start = time.time()
+        else:
+            if balls_in_robot < 3:
+                self.__three_ball_start = None
+            else:
+                time_left = 3 - (time.time() - self.__three_ball_start)
+                if time_left < 0.25:
+                    # Shoot balls to avoid penalty
+                    controls.shoot = True
 
         # Update mode
         if gamepad_state.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
