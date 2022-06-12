@@ -46,6 +46,7 @@ def ball_search(robot: RobotState, balls: list[Element]) -> tuple[float, float, 
 
 
 turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
+hood_pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadState) -> Controls:
     '''Semi-automated control'''
     # Find general info
@@ -79,12 +80,16 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         hood_angle = (hood_angle - 450) * -1
     elif hood_angle <= 90:
         hood_angle = (hood_angle - 90) * -1
-    if hood_angle > target_hood_angle:
-        aim_up = False
-        aim_down = True
-    elif hood_angle < target_hood_angle:
+    # Use PID control to setup the hood angle
+    angle_difference = target_hood_angle - hood_angle
+    angle_output = hood_pid(angle_difference)
+    print(f"{angle_difference:.2f}\t{angle_output:.2f}")
+    if angle_output < 0:
         aim_up = True
         aim_down = False
+    elif angle_output > 0:
+        aim_up = False
+        aim_down = True
     else:
         aim_up = False
         aim_down = False
@@ -110,10 +115,11 @@ def control(robot: RobotState, game: GameElementState, gamepad_input: GamepadSta
         gamepad_input.a, toggle_right_intake, toggle_left_intake, gamepad_input.y,
         aim_down, aim_up,
         gamepad_input.dpad_left, gamepad_input.dpad_right,
-        False, False, gamepad_input.start, gamepad_input.back,
+        True, True, gamepad_input.start, gamepad_input.back,
         gamepad_input.right_y, rotation,
         gamepad_input.left_y, gamepad_input.left_x,
-        gamepad_input.trigger_left, gamepad_input.trigger_right
+        gamepad_input.trigger_left, gamepad_input.trigger_right,
+        abs(angle_output)
     )
 
 
