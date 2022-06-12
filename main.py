@@ -1,6 +1,7 @@
 import json
 import math
 import time
+from enum import Enum
 from simple_pid import PID
 from models import Element, GameElementState, IntakeSide, RobotState, GameState, Controls, GamepadState, Gamepad, Command
 
@@ -12,8 +13,15 @@ FPS: float = 100
 
 class MainCommand(Command):
     '''Automated control of rotation and intakes'''
+    class Mode(Enum):
+        '''Represents the mode'''
+        TWO_BALL = 2
+        THREE_BALL = 3
+
     def __init__(self):
+        super().__init__()
         self.__turn_pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
+        self.__mode = MainCommand.Mode.TWO_BALL
 
     @staticmethod
     def __ball_search(robot: RobotState, balls: list[Element]
@@ -66,22 +74,38 @@ class MainCommand(Command):
         (angle_to_nearest_ball, distance_to_nearest_ball,
             nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, game.blue_cargo)
 
+        # Update mode
+        if gamepad_state.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
+            self.__mode = MainCommand.Mode.THREE_BALL
+            print(f"Switching to {self.__mode.name}")
+        elif gamepad_state.dpad_down and self.__mode != MainCommand.Mode.TWO_BALL:
+            self.__mode = MainCommand.Mode.TWO_BALL
+            print(f"Switching to {self.__mode.name}")
+
         # Determine controls
         rotation = gamepad_input.right_x
         toggle_left_intake = gamepad_input.x
         toggle_right_intake = gamepad_input.b
         if gamepad_input.bumper_right:
-            # Turn to hub with both intakes up
+            # Turn to hub
             rotation = self.__turn_pid(angle_to_hub)
-            toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
-            toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
+            if self.__mode == MainCommand.Mode.TWO_BALL:
+                # with both intakes up in two ball mode
+                toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
+                toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
         elif gamepad_input.bumper_left:
-            # Turn to ball, put nearby intake down and put far intake up
+            # Turn to ball
             rotation = self.__turn_pid(angle_to_nearest_ball)
-            toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
-                    IntakeSide.LEFT == nearest_intake)
-            toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
-                    IntakeSide.RIGHT == nearest_intake)
+            if self.__mode == MainCommand.Mode.TWO_BALL:
+                # put nearby intake down and put far intake up in two ball mode
+                toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
+                        IntakeSide.LEFT == nearest_intake)
+                toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
+                        IntakeSide.RIGHT == nearest_intake)
+        if self.__mode == MainCommand.Mode.THREE_BALL:
+            # Keep both intakes down in three ball mode
+            toggle_left_intake = robot.intake_up(IntakeSide.LEFT)
+            toggle_right_intake = robot.intake_up(IntakeSide.RIGHT)
 
         # Set controls
         controls.rotate = rotation
@@ -93,6 +117,7 @@ class MainCommand(Command):
 class HoodCommand(Command):
     '''Automated control of the hood based on Eliot's angles'''
     def __init__(self):
+        super().__init__()
         self.__hood_pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 
     def execute(self,
