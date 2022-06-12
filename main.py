@@ -194,19 +194,26 @@ class ClimberCommand(Command):
 
         # Control arm angle
         if controls.climber_forward < 0.5 and controls.climber_reverse < 0.5:
-            hook_angle = robot.climber_hook.local_rotation.z
-            if hook_angle > 180:
-                hook_angle -= 360
-            if hook_angle < -90:
-                hook_angle += 180
-            elif hook_angle > 90:
-                hook_angle -= 180
-            error = target_angle - hook_angle
-            control_output = self.__pid(error)
-            if control_output > 0:
-                controls.climber_forward = control_output
-            elif control_output < 0:
-                controls.climber_reverse = abs(control_output)
+            if robot.body.global_position.y > 0.25 and robot.body.global_position.y < 0.625:
+                # Auto climb until up
+                controls.climber_forward = 1.0
+            else:
+                if robot.body.global_position.y > 0.625:
+                    # Once up, hold angle
+                    target_angle = -10
+                hook_angle = robot.climber_hook.local_rotation.z
+                if hook_angle > 180:
+                    hook_angle -= 360
+                if hook_angle < -90:
+                    hook_angle += 180
+                elif hook_angle > 90:
+                    hook_angle -= 180
+                error = target_angle - hook_angle
+                control_output = self.__pid(error)
+                if control_output > 0:
+                    controls.climber_forward = control_output
+                elif control_output < 0:
+                    controls.climber_reverse = abs(control_output)
 
         return controls
 
