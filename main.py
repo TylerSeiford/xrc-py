@@ -17,6 +17,7 @@ class MainCommand(Command):
         '''Represents the mode'''
         TWO_BALL = 2
         THREE_BALL = 3
+        ALL_BALLS = 4
 
     def __init__(self):
         super().__init__()
@@ -85,11 +86,14 @@ class MainCommand(Command):
                 self.__three_ball_start = None
             else:
                 time_left = THREE_BALL_TIME_LIMIT - (time.time() - self.__three_ball_start)
-                if time_left < 0.25:
+                if time_left < 0.25 and self.__mode != MainCommand.Mode.ALL_BALLS:
                     # Shoot balls to avoid penalty
                     controls.shoot = True
 
         # Update mode
+        if gamepad_state.right_y < -0.5 and self.__mode != MainCommand.Mode.ALL_BALLS:
+            self.__mode = MainCommand.Mode.ALL_BALLS
+            print(f"Switching to {self.__mode.name}")
         if gamepad_state.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
             self.__mode = MainCommand.Mode.THREE_BALL
             print(f"Switching to {self.__mode.name}")
@@ -117,8 +121,8 @@ class MainCommand(Command):
                         IntakeSide.LEFT == nearest_intake)
                 toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
                         IntakeSide.RIGHT == nearest_intake)
-        if self.__mode == MainCommand.Mode.THREE_BALL:
-            # Keep both intakes down in three ball mode
+        if self.__mode in [MainCommand.Mode.THREE_BALL, self.__mode == MainCommand.Mode.ALL_BALLS]:
+            # Keep both intakes down in three+ ball mode
             toggle_left_intake = robot.intake_up(IntakeSide.LEFT)
             toggle_right_intake = robot.intake_up(IntakeSide.RIGHT)
 
@@ -141,18 +145,18 @@ class HoodCommand(Command):
             controls: Controls) -> Controls:
         '''Execute'''
         HOOD_ANGLES = [
-            180, 170, 162, 155, 147,
-            140, 132, 126, 120, 115,
-            110, 105, 100, 95, 90,
-            85, 80, 75, 70, 66,
-            62, 58, 54, 50, 47,
-            44, 41, 38, 36, 34,
-            32
+            165,  155,  147,  145, 140,
+            136,  127,  125,  120, 117,
+            110,  107,  102,  99,  94,
+            90,   86,   81,   77,  73,
+            69,   65,   60,   41,  40,
+            38,   35,   33,   31,  29,
+            27,   25,   22.5, 20,  0
         ]
         distance_to_hub = math.hypot(robot.body.global_position.x,
             robot.body.global_position.z)
-        hood_index = int((distance_to_hub - 1.0) * 10)
-        hood_index = min(max(hood_index, 0), 30)
+        hood_index = int((distance_to_hub - 1.3) * 10)
+        hood_index = min(max(hood_index, 0), 34)
         target_hood_angle = HOOD_ANGLES[hood_index]
         hood_angle = robot.hood.local_rotation.x
         if hood_angle >= 270:
@@ -175,7 +179,7 @@ class ClimberCommand(Command):
     '''Automated control of the climber'''
     def __init__(self):
         super().__init__()
-        self.__pid = PID(-0.050, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
+        self.__pid = PID(-0.100, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
 
     def execute(self,
             robot: RobotState, elements: GameElementState,
@@ -194,14 +198,12 @@ class ClimberCommand(Command):
 
         # Control arm angle
         if controls.climber_forward < 0.5 and controls.climber_reverse < 0.5:
-            if robot.body.global_position.y > 0.25 and robot.body.global_position.y < 0.625:
+            if robot.body.global_position.y > 0.25 and robot.body.global_position.y < 0.75:
                 # Auto climb until up
                 controls.climber_forward = 1.0
-            else:
-                if robot.body.global_position.y > 0.625:
-                    # Once up, hold angle
-                    target_angle = 70
-                hook_angle = robot.climber_hook.local_rotation.z
+            elif robot.body.global_position.y < 0.625:
+                # We use hook one but use similar logic to the dual intakes to move the nearest one
+                hook_angle = robot.climber_hook_1.local_rotation.z
                 if hook_angle > 180:
                     hook_angle -= 360
                 if hook_angle < -90:
