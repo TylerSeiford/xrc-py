@@ -407,9 +407,9 @@ class State:
     __distance_to_hub: float = None
     __angle_from_hub: float = None
     __angle_to_hub: float = None
-    __balls_in_robot: list[Element] = None
-    __nearest_ball: Element = None
-    __nearest_ball_info: tuple[float, float, IntakeSide] = None
+    __alliance_cargo_in_robot: list[Element] = None
+    __nearest_cargo: Element = None
+    __nearest_cargo_info: tuple[float, float, IntakeSide] = None
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
@@ -453,28 +453,28 @@ class State:
                 self.__angle_to_hub -= 360
         return self.__angle_to_hub
 
-    def __ball_search(self) -> None:
-        '''Find the angle & distance to nearest ball, nearest intake, and # of balls in robot'''
+    def __alliance_cargo_search(self) -> None:
+        '''Find the angle & distance to nearest cargo, nearest intake, and # of cargo in robot'''
         if self.__alliance == Alliance.BLUE:
-            balls = self.elements.blue_cargo
+            alliance_cargo = self.elements.blue_cargo
         else:
-            balls = self.elements.red_cargo
+            alliance_cargo = self.elements.red_cargo
         nearest_distance = float('inf')
         nearest_vector = None
         nearest = None
-        balls_in_bot = []
-        for ball in balls:
-            difference = self.robot.body.global_position - ball.global_position
+        cargo_in_bot = []
+        for cargo in alliance_cargo:
+            difference = self.robot.body.global_position - cargo.global_position
             distance = math.hypot(difference.x, difference.y, difference.z)
             if distance < 0.4:
-                # Ball is in robot
-                balls_in_bot.append(ball)
+                # Cargo is in robot
+                cargo_in_bot.append(cargo)
             elif difference.y < -0.5:
-                pass # Ball is still too high
+                pass # Cargo is too high
             elif distance < nearest_distance:
                 nearest_distance = distance
                 nearest_vector = difference
-                nearest = ball
+                nearest = cargo
         angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
         angle = angle - self.robot.body.global_rotation.y
         if angle < -180:
@@ -491,27 +491,27 @@ class State:
             intake = IntakeSide.LEFT
         else:
             intake = IntakeSide.RIGHT
-        self.__nearest_ball = nearest
-        self.__nearest_ball_info = (angle, nearest_distance, intake)
-        self.__balls_in_robot = balls_in_bot
+        self.__nearest_cargo = nearest
+        self.__nearest_cargo_info = (angle, nearest_distance, intake)
+        self.__alliance_cargo_in_robot = cargo_in_bot
 
-    def balls_in_robot(self) -> list[Element]:
-        '''Returns the balls in the robot'''
-        if self.__balls_in_robot is None:
-            self.__ball_search()
-        return self.__balls_in_robot
+    def cargo_in_robot(self) -> list[Element]:
+        '''Returns the cargo in the robot'''
+        if self.__alliance_cargo_in_robot is None:
+            self.__alliance_cargo_search()
+        return self.__alliance_cargo_in_robot
 
-    def nearest_ball(self) -> Element:
-        '''Returns the nearest ball'''
-        if self.__nearest_ball is None:
-            self.__ball_search()
-        return self.__nearest_ball
+    def nearest_cargo(self) -> Element:
+        '''Returns the nearest cargo'''
+        if self.__nearest_cargo is None:
+            self.__alliance_cargo_search()
+        return self.__nearest_cargo
 
-    def nearest_ball_info(self) -> tuple[float, float, IntakeSide]:
-        '''Returns the angle to, distance to, and intake closest to the nearest ball'''
-        if self.__nearest_ball_info is None:
-            self.__ball_search()
-        return self.__nearest_ball_info
+    def nearest_cargo_info(self) -> tuple[float, float, IntakeSide]:
+        '''Returns the angle to, distance to, and intake closest to the nearest cargo'''
+        if self.__nearest_cargo_info is None:
+            self.__alliance_cargo_search()
+        return self.__nearest_cargo_info
 
 class Command:
     '''Represents a command to modify the controls for the robot'''

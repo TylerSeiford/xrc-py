@@ -7,52 +7,52 @@ from models import IntakeSide, GamePhase, Alliance, Controls, Gamepad, State, Co
 
 FPS: float = 100
 ALLIANCE: Alliance = Alliance.RED
-THREE_BALL_TIME_LIMIT: float = 1.625
+THREE_CARGO_TIME_LIMIT: float = 1.625
 
 
 class MainCommand(Command):
     '''Automated control of rotation and intakes'''
     class Mode(Enum):
         '''Represents the mode'''
-        TWO_BALL = 2
-        THREE_BALL = 3
-        ALL_BALLS = 4
+        TWO_CARGO = 2
+        THREE_CARGO = 3
+        ALL_CARGO = 4
 
     def __init__(self):
         super().__init__()
         self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
-        self.__mode = MainCommand.Mode.THREE_BALL
-        self.__three_ball_start = None
+        self.__mode = MainCommand.Mode.THREE_CARGO
+        self.__three_cargo_start = None
 
     def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
         # Gather data
         angle_to_hub = state.angle_to_hub()
-        angle_to_nearest_ball, _, nearest_intake = state.nearest_ball_info()
-        balls_in_robot = len(state.balls_in_robot())
+        angle_to_nearest_cargo, _, nearest_intake = state.nearest_cargo_info()
+        cargo_in_robot = len(state.cargo_in_robot())
 
-        # Update ball data
-        if self.__three_ball_start is None:
-            if balls_in_robot >= 3:
-                self.__three_ball_start = time.time()
+        # Update cargo data
+        if self.__three_cargo_start is None:
+            if cargo_in_robot >= 3:
+                self.__three_cargo_start = time.time()
         else:
-            if balls_in_robot < 3:
-                self.__three_ball_start = None
+            if cargo_in_robot < 3:
+                self.__three_cargo_start = None
             else:
-                time_left = THREE_BALL_TIME_LIMIT - (time.time() - self.__three_ball_start)
-                if time_left < 0.25 and self.__mode != MainCommand.Mode.ALL_BALLS:
-                    # Shoot balls to avoid penalty
+                time_left = THREE_CARGO_TIME_LIMIT - (time.time() - self.__three_cargo_start)
+                if time_left < 0.25 and self.__mode != MainCommand.Mode.ALL_CARGO:
+                    # Shoot cargo to avoid penalty
                     controls.shoot = True
 
         # Update mode
-        if state.gamepad.right_y < -0.5 and self.__mode != MainCommand.Mode.ALL_BALLS:
-            self.__mode = MainCommand.Mode.ALL_BALLS
+        if state.gamepad.right_y < -0.875 and self.__mode != MainCommand.Mode.ALL_CARGO:
+            self.__mode = MainCommand.Mode.ALL_CARGO
             print(f"Switching to {self.__mode.name}")
-        if state.gamepad.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
-            self.__mode = MainCommand.Mode.THREE_BALL
+        if state.gamepad.dpad_up and self.__mode != MainCommand.Mode.THREE_CARGO:
+            self.__mode = MainCommand.Mode.THREE_CARGO
             print(f"Switching to {self.__mode.name}")
-        elif state.gamepad.dpad_down and self.__mode != MainCommand.Mode.TWO_BALL:
-            self.__mode = MainCommand.Mode.TWO_BALL
+        elif state.gamepad.dpad_down and self.__mode != MainCommand.Mode.TWO_CARGO:
+            self.__mode = MainCommand.Mode.TWO_CARGO
             print(f"Switching to {self.__mode.name}")
 
         # Determine controls
@@ -62,21 +62,21 @@ class MainCommand(Command):
         if state.gamepad.bumper_right:
             # Turn to hub
             rotation = self.__pid(angle_to_hub)
-            if self.__mode == MainCommand.Mode.TWO_BALL:
-                # with both intakes up in two ball mode
+            if self.__mode == MainCommand.Mode.TWO_CARGO:
+                # with both intakes up in two cargo mode
                 toggle_left_intake = not state.robot.intake_up(IntakeSide.LEFT)
                 toggle_right_intake = not state.robot.intake_up(IntakeSide.RIGHT)
         elif state.gamepad.bumper_left:
-            # Turn to ball
-            rotation = self.__pid(angle_to_nearest_ball)
-            if self.__mode == MainCommand.Mode.TWO_BALL:
-                # put nearby intake down and put far intake up in two ball mode
+            # Turn to cargo
+            rotation = self.__pid(angle_to_nearest_cargo)
+            if self.__mode == MainCommand.Mode.TWO_CARGO:
+                # put nearby intake down and put far intake up in two cargo mode
                 toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT) == (
                         IntakeSide.LEFT == nearest_intake)
                 toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT) == (
                         IntakeSide.RIGHT == nearest_intake)
-        if self.__mode in [MainCommand.Mode.THREE_BALL, MainCommand.Mode.ALL_BALLS]:
-            # Keep both intakes down in three+ ball mode
+        if self.__mode in [MainCommand.Mode.THREE_CARGO, MainCommand.Mode.ALL_CARGO]:
+            # Keep both intakes down in all cargo mode
             toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT)
             toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT)
 
@@ -136,7 +136,7 @@ class ClimberCommand(Command):
 
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position
-        if state.game.phase not in [GamePhase.ENDGAME, GamePhase.FINISHED]:
+        if state.game.phase not in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
             # Keep arms retracted
             target_angle = 0
         elif ALLIANCE == Alliance.RED and body_position.x < -1.8 and body_position.z < -6.0:
