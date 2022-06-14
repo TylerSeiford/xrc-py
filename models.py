@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from io import TextIOWrapper
 import json
+import math
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 import pygame
@@ -223,6 +224,7 @@ class RobotState:
 
 
 class Alliance(Enum):
+    '''Represents the alliance of the robot'''
     RED = 0
     BLUE = 1
 
@@ -394,14 +396,128 @@ class Gamepad:
         )
 
 
+@dataclass
+class State:
+    '''Represents the current state of everything'''
+    robot: RobotState
+    elements: GameElementState
+    game: GameState
+    gamepad: GamepadState
+    __alliance: Alliance
+    __distance_to_hub: float = None
+    __angle_from_hub: float = None
+    __angle_to_hub: float = None
+    __balls_in_robot: list[Element] = None
+    __nearest_ball: Element = None
+    __nearest_ball_info: tuple[float, float, IntakeSide] = None
+
+    @staticmethod
+    def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
+            robot_file: TextIOWrapper, gamepad: Gamepad,
+            alliance: Alliance) -> 'State':
+        '''Reads the current state from the files'''
+        try:
+            game_state = GameState.read(game_file)
+            element_state = GameElementState.read(element_file)
+            robot_state = RobotState.read(robot_file)
+            gamepad_state = gamepad.read()
+            return State(robot_state, element_state, game_state, gamepad_state, alliance)
+        except json.JSONDecodeError:
+            return None # Error reading file, try again
+        except ValueError:
+            return None # Error reading file, try again
+
+    def distance_to_hub(self) -> float:
+        '''Returns the distance to the hub'''
+        if self.__distance_to_hub is None:
+            self.__distance_to_hub = math.hypot(
+                    self.robot.body.global_position.x,
+                    self.robot.body.global_position.z
+            )
+        return  self.__distance_to_hub
+
+    def angle_from_hub(self) -> float:
+        '''Returns the angle from the hub to the robot'''
+        if self.__angle_from_hub is None:
+            self.__angle_from_hub = math.degrees(math.atan2(self.robot.body.global_position.x,
+                    self.robot.body.global_position.z))
+        return self.__angle_from_hub
+
+    def angle_to_hub(self) -> float:
+        '''Returns the angle to the hub from the robot'''
+        if self.__angle_to_hub is None:
+            self.__angle_to_hub = self.angle_from_hub() - self.robot.body.global_rotation.y + 90
+            if self.__angle_to_hub < -180:
+                self.__angle_to_hub += 360
+            elif self.__angle_to_hub > 180:
+                self.__angle_to_hub -= 360
+        return self.__angle_to_hub
+
+    def __ball_search(self) -> None:
+        '''Find the angle & distance to nearest ball, nearest intake, and # of balls in robot'''
+        if self.__alliance == Alliance.BLUE:
+            balls = self.elements.blue_cargo
+        else:
+            balls = self.elements.red_cargo
+        nearest_distance = float('inf')
+        nearest_vector = None
+        nearest = None
+        balls_in_bot = []
+        for ball in balls:
+            difference = self.robot.body.global_position - ball.global_position
+            distance = math.hypot(difference.x, difference.y, difference.z)
+            if distance < 0.4:
+                # Ball is in robot
+                balls_in_bot.append(ball)
+            elif difference.y < -0.5:
+                pass # Ball is still too high
+            elif distance < nearest_distance:
+                nearest_distance = distance
+                nearest_vector = difference
+                nearest = ball
+        angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
+        angle = angle - self.robot.body.global_rotation.y
+        if angle < -180:
+            angle += 360
+        elif angle > 180:
+            angle -= 360
+
+        # Wrap angle for dual intakes
+        if angle > 90:
+            angle -= 180
+            intake = IntakeSide.LEFT
+        elif angle < -90:
+            angle += 180
+            intake = IntakeSide.LEFT
+        else:
+            intake = IntakeSide.RIGHT
+        self.__nearest_ball = nearest
+        self.__nearest_ball_info = (angle, nearest_distance, intake)
+        self.__balls_in_robot = balls_in_bot
+
+    def balls_in_robot(self) -> list[Element]:
+        '''Returns the balls in the robot'''
+        if self.__balls_in_robot is None:
+            self.__ball_search()
+        return self.__balls_in_robot
+
+    def nearest_ball(self) -> Element:
+        '''Returns the nearest ball'''
+        if self.__nearest_ball is None:
+            self.__ball_search()
+        return self.__nearest_ball
+
+    def nearest_ball_info(self) -> tuple[float, float, IntakeSide]:
+        '''Returns the angle to, distance to, and intake closest to the nearest ball'''
+        if self.__nearest_ball_info is None:
+            self.__ball_search()
+        return self.__nearest_ball_info
+
 class Command:
     '''Represents a command to modify the controls for the robot'''
     def __init__(self):
         pass
 
-    def execute(self,
-            robot: RobotState, elements: GameElementState,
-            game: GameState, gamepad_input: GamepadState,
-            controls: Controls) -> Controls:
+    def execute(self, state: State, controls: Controls) -> Controls:
         '''Executes the command'''
         return controls

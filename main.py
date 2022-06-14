@@ -1,9 +1,7 @@
-import json
-import math
 import time
 from enum import Enum
 from simple_pid import PID
-from models import Element, GameElementState, IntakeSide, RobotState, GamePhase, GameState, Alliance, Controls, GamepadState, Gamepad, Command
+from models import IntakeSide, GamePhase, Alliance, Controls, Gamepad, State, Command
 
 
 
@@ -26,61 +24,12 @@ class MainCommand(Command):
         self.__mode = MainCommand.Mode.THREE_BALL
         self.__three_ball_start = None
 
-    @staticmethod
-    def __ball_search(robot: RobotState, balls: list[Element]
-            ) -> tuple[float, float, IntakeSide, int]:
-        '''Find the angle & distance to nearest ball, nearest intake, and # of balls in robot'''
-        nearest_distance = float('inf')
-        nearest_vector = None
-        balls_in_bot = 0
-        for ball in balls:
-            difference = robot.body.global_position - ball.global_position
-            distance = math.hypot(difference.x, difference.y, difference.z)
-            if distance < 0.4:
-                # Ball is in robot
-                balls_in_bot += 1
-            elif difference.y < -0.5:
-                pass # Ball is still too high
-            elif distance < nearest_distance:
-                nearest_distance = distance
-                nearest_vector = difference
-        angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
-        angle = angle - robot.body.global_rotation.y
-        if angle < -180:
-            angle += 360
-        elif angle > 180:
-            angle -= 360
-
-        # Wrap angle for dual intakes
-        if angle > 90:
-            angle -= 180
-            intake = IntakeSide.LEFT
-        elif angle < -90:
-            angle += 180
-            intake = IntakeSide.LEFT
-        else:
-            intake = IntakeSide.RIGHT
-        return angle, nearest_distance, intake, balls_in_bot
-
-    def execute(self,
-            robot: RobotState, elements: GameElementState,
-            game: GameState, gamepad_input: GamepadState,
-            controls: Controls) -> Controls:
+    def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
         # Gather data
-        angle_from_hub = math.degrees(math.atan2(robot.body.global_position.x,
-                robot.body.global_position.z))
-        angle_to_hub = angle_from_hub - robot.body.global_rotation.y + 90
-        if angle_to_hub < -180:
-            angle_to_hub += 360
-        elif angle_to_hub > 180:
-            angle_to_hub -= 360
-        if ALLIANCE == Alliance.RED:
-            cargo = elements.red_cargo
-        else:
-            cargo = elements.blue_cargo
-        (angle_to_nearest_ball, distance_to_nearest_ball,
-            nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, cargo)
+        angle_to_hub = state.angle_to_hub()
+        angle_to_nearest_ball, _, nearest_intake = state.nearest_ball_info()
+        balls_in_robot = len(state.balls_in_robot())
 
         # Update ball data
         if self.__three_ball_start is None:
@@ -96,40 +45,40 @@ class MainCommand(Command):
                     controls.shoot = True
 
         # Update mode
-        if gamepad_state.right_y < -0.5 and self.__mode != MainCommand.Mode.ALL_BALLS:
+        if state.gamepad.right_y < -0.5 and self.__mode != MainCommand.Mode.ALL_BALLS:
             self.__mode = MainCommand.Mode.ALL_BALLS
             print(f"Switching to {self.__mode.name}")
-        if gamepad_state.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
+        if state.gamepad.dpad_up and self.__mode != MainCommand.Mode.THREE_BALL:
             self.__mode = MainCommand.Mode.THREE_BALL
             print(f"Switching to {self.__mode.name}")
-        elif gamepad_state.dpad_down and self.__mode != MainCommand.Mode.TWO_BALL:
+        elif state.gamepad.dpad_down and self.__mode != MainCommand.Mode.TWO_BALL:
             self.__mode = MainCommand.Mode.TWO_BALL
             print(f"Switching to {self.__mode.name}")
 
         # Determine controls
-        rotation = gamepad_input.right_x
-        toggle_left_intake = gamepad_input.x
-        toggle_right_intake = gamepad_input.b
-        if gamepad_input.bumper_right:
+        rotation = state.gamepad.right_x
+        toggle_left_intake = state.gamepad.x
+        toggle_right_intake = state.gamepad.b
+        if state.gamepad.bumper_right:
             # Turn to hub
             rotation = self.__pid(angle_to_hub)
             if self.__mode == MainCommand.Mode.TWO_BALL:
                 # with both intakes up in two ball mode
-                toggle_left_intake = not robot.intake_up(IntakeSide.LEFT)
-                toggle_right_intake = not robot.intake_up(IntakeSide.RIGHT)
-        elif gamepad_input.bumper_left:
+                toggle_left_intake = not state.robot.intake_up(IntakeSide.LEFT)
+                toggle_right_intake = not state.robot.intake_up(IntakeSide.RIGHT)
+        elif state.gamepad.bumper_left:
             # Turn to ball
             rotation = self.__pid(angle_to_nearest_ball)
             if self.__mode == MainCommand.Mode.TWO_BALL:
                 # put nearby intake down and put far intake up in two ball mode
-                toggle_left_intake = robot.intake_up(IntakeSide.LEFT) == (
+                toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT) == (
                         IntakeSide.LEFT == nearest_intake)
-                toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
+                toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT) == (
                         IntakeSide.RIGHT == nearest_intake)
         if self.__mode in [MainCommand.Mode.THREE_BALL, MainCommand.Mode.ALL_BALLS]:
             # Keep both intakes down in three+ ball mode
-            toggle_left_intake = robot.intake_up(IntakeSide.LEFT)
-            toggle_right_intake = robot.intake_up(IntakeSide.RIGHT)
+            toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT)
+            toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT)
 
         # Set controls
         controls.rotate = rotation
@@ -144,10 +93,7 @@ class HoodCommand(Command):
         super().__init__()
         self.__pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 
-    def execute(self,
-            robot: RobotState, elements: GameElementState,
-            game: GameState, gamepad_input: GamepadState,
-            controls: Controls) -> Controls:
+    def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
         HOOD_ANGLES = [
             165,  155,  147,  145, 140,
@@ -158,12 +104,11 @@ class HoodCommand(Command):
             38,   35,   33,   31,  29,
             27,   25,   22.5, 20,  0
         ]
-        distance_to_hub = math.hypot(robot.body.global_position.x,
-            robot.body.global_position.z)
+        distance_to_hub = state.distance_to_hub()
         hood_index = int((distance_to_hub - 1.3) * 10)
         hood_index = min(max(hood_index, 0), 34)
         target_hood_angle = HOOD_ANGLES[hood_index]
-        hood_angle = robot.hood.local_rotation.x
+        hood_angle = state.robot.hood.local_rotation.x
         if hood_angle >= 270:
             hood_angle = (hood_angle - 450) * -1
         elif hood_angle <= 90:
@@ -186,15 +131,12 @@ class ClimberCommand(Command):
         super().__init__()
         self.__pid = PID(-0.100, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
 
-    def execute(self,
-            robot: RobotState, elements: GameElementState,
-            game: GameState, gamepad_input: GamepadState,
-            controls: Controls) -> Controls:
+    def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
 
         # Extend arms when in hangar during endgame
-        body_position = robot.body.global_position
-        if game.phase not in [GamePhase.ENDGAME, GamePhase.FINISHED]:
+        body_position = state.robot.body.global_position
+        if state.game.phase not in [GamePhase.ENDGAME, GamePhase.FINISHED]:
             # Keep arms retracted
             target_angle = 0
         elif ALLIANCE == Alliance.RED and body_position.x < -1.8 and body_position.z < -6.0:
@@ -214,7 +156,7 @@ class ClimberCommand(Command):
                 controls.climber_forward = 1.0
             elif body_position.y < 0.625:
                 # We use hook one but use similar logic to the dual intakes to move the nearest one
-                hook_angle = robot.climber_hook_1.local_rotation.z
+                hook_angle = state.robot.climber_hook_1.local_rotation.z
                 if hook_angle > 180:
                     hook_angle -= 360
                 if hook_angle < -90:
@@ -236,34 +178,18 @@ if __name__ == '__main__':
     main_command = MainCommand()
     hood_command = HoodCommand()
     climber_command = ClimberCommand()
+    commands: list[Command] = [main_command, hood_command, climber_command]
 
     while True:
         start = time.time()
         with (open('GAME_STATE.txt', 'rt', encoding='UTF+8') as game_file,
                 open('GameElements.txt', 'rt', encoding='UTF+8') as element_file,
                 open('myRobot.txt', 'rt', encoding='UTF+8') as robot_file):
-            try:
-                game_state = GameState.read(game_file)
-                element_state = GameElementState.read(element_file)
-                robot_state = RobotState.read(robot_file)
-            except json.JSONDecodeError:
-                continue # Error reading file, try again
-            except ValueError:
-                continue # Error reading file, try again
-
-            gamepad_state = gamepad.read()
-            control_outputs = gamepad_state.default()
-            control_outputs = main_command.execute(
-                    robot_state, element_state,
-                    game_state, gamepad_state,
-                    control_outputs)
-            control_outputs = hood_command.execute(
-                    robot_state, element_state,
-                    game_state, gamepad_state,
-                    control_outputs)
-            control_outputs = climber_command.execute(
-                    robot_state, element_state,
-                    game_state, gamepad_state,
-                    control_outputs)
+            state = State.read(game_file, element_file, robot_file, gamepad, ALLIANCE)
+            if state is None:
+                continue
+            control_outputs = state.gamepad.default()
+            for command in commands:
+                control_outputs = command.execute(state, control_outputs)
             control_outputs.write()
         time.sleep(max((1 / FPS) - (time.time() - start), 0))
