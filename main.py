@@ -3,11 +3,12 @@ import math
 import time
 from enum import Enum
 from simple_pid import PID
-from models import Element, GameElementState, IntakeSide, RobotState, GamePhase, GameState, Controls, GamepadState, Gamepad, Command
+from models import Element, GameElementState, IntakeSide, RobotState, GamePhase, GameState, Alliance, Controls, GamepadState, Gamepad, Command
 
 
 
 FPS: float = 100
+ALLIANCE: Alliance = Alliance.RED
 THREE_BALL_TIME_LIMIT: float = 1.625
 
 
@@ -74,8 +75,12 @@ class MainCommand(Command):
             angle_to_hub += 360
         elif angle_to_hub > 180:
             angle_to_hub -= 360
+        if ALLIANCE == Alliance.RED:
+            cargo = elements.red_cargo
+        else:
+            cargo = elements.blue_cargo
         (angle_to_nearest_ball, distance_to_nearest_ball,
-            nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, elements.blue_cargo)
+            nearest_intake, balls_in_robot) = MainCommand.__ball_search(robot, cargo)
 
         # Update ball data
         if self.__three_ball_start is None:
@@ -121,7 +126,7 @@ class MainCommand(Command):
                         IntakeSide.LEFT == nearest_intake)
                 toggle_right_intake = robot.intake_up(IntakeSide.RIGHT) == (
                         IntakeSide.RIGHT == nearest_intake)
-        if self.__mode in [MainCommand.Mode.THREE_BALL, self.__mode == MainCommand.Mode.ALL_BALLS]:
+        if self.__mode in [MainCommand.Mode.THREE_BALL, MainCommand.Mode.ALL_BALLS]:
             # Keep both intakes down in three+ ball mode
             toggle_left_intake = robot.intake_up(IntakeSide.LEFT)
             toggle_right_intake = robot.intake_up(IntakeSide.RIGHT)
@@ -188,8 +193,14 @@ class ClimberCommand(Command):
         '''Execute'''
 
         # Extend arms when in hangar during endgame
-        if (robot.body.global_position.x > 1.8 and robot.body.global_position.z > 6.0
-                and (game.phase == GamePhase.ENDGAME or game.phase == GamePhase.FINISHED)):
+        body_position = robot.body.global_position
+        if game.phase not in [GamePhase.ENDGAME, GamePhase.FINISHED]:
+            # Keep arms retracted
+            target_angle = 0
+        elif ALLIANCE == Alliance.RED and body_position.x < -1.8 and body_position.z < -6.0:
+            controls.climber_extend = True
+            target_angle = 65
+        elif ALLIANCE == Alliance.BLUE and body_position.x > 1.8 and body_position.z > 6.0:
             controls.climber_extend = True
             target_angle = 65
         else:
@@ -198,10 +209,10 @@ class ClimberCommand(Command):
 
         # Control arm angle
         if controls.climber_forward < 0.5 and controls.climber_reverse < 0.5:
-            if robot.body.global_position.y > 0.25 and robot.body.global_position.y < 0.75:
+            if body_position.y > 0.25 and body_position.y < 0.75:
                 # Auto climb until up
                 controls.climber_forward = 1.0
-            elif robot.body.global_position.y < 0.625:
+            elif body_position.y < 0.625:
                 # We use hook one but use similar logic to the dual intakes to move the nearest one
                 hook_angle = robot.climber_hook_1.local_rotation.z
                 if hook_angle > 180:

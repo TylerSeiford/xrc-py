@@ -222,6 +222,11 @@ class RobotState:
         return f"Robot @ {self.body.global_position}"
 
 
+class Alliance(Enum):
+    RED = 0
+    BLUE = 1
+
+
 @dataclass
 class Controls:
     '''Represents the current controls for a robot'''
@@ -345,13 +350,26 @@ class GamepadState:
 class Gamepad:
     '''Represents the gamepad'''
     def __init__(self, stick: int = 0):
-        pygame.init()
-        pygame.joystick.init()
-        self.__joystick = pygame.joystick.Joystick(stick)
-        print(f"Detected {self.__joystick.get_name()}")
+        try:
+            pygame.init()
+            pygame.joystick.init()
+            self.__joystick = pygame.joystick.Joystick(stick)
+            print(f"Detected '{self.__joystick.get_name()}'")
+        except pygame.error:
+            print("No gamepad detected")
+            self.__joystick = None
 
     def read(self) -> GamepadState:
         '''Reads the current state from a joystick'''
+        if self.__joystick is None:
+            return GamepadState(
+                    False, False, False, False,
+                    False, False, False, False,
+                    False, False, False, False,
+                    0, 0,
+                    0, 0,
+                    0, 0
+            )
         pygame.event.pump()
         dpad = self.__joystick.get_hat(0)
         return GamepadState(
@@ -374,7 +392,6 @@ class Gamepad:
             trigger_left=(self.__joystick.get_axis(4) + 1) / 2,
             trigger_right=(self.__joystick.get_axis(5) + 1) / 2
         )
-
 
 
 class Command:
