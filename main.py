@@ -10,26 +10,104 @@ ALLIANCE: Alliance = Alliance.RED
 THREE_CARGO_TIME_LIMIT: float = 1.625
 
 
-class MainCommand(Command):
-    '''Automated control of rotation and intakes'''
-    class Mode(Enum):
-        '''Represents the mode'''
-        TWO_CARGO = 2
-        THREE_CARGO = 3
-        ALL_CARGO = 4
+
+class RotationCommand(Command):
+    '''Automated control of rotation'''
 
     def __init__(self):
         super().__init__()
         self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
-        self.__mode = MainCommand.Mode.THREE_CARGO
-        self.__three_cargo_start = None
 
     def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
         # Gather data
         angle_to_hub = state.angle_to_hub()
-        angle_to_nearest_cargo, _, nearest_intake = state.nearest_cargo_info()
+        angle_to_nearest_cargo, _, _ = state.nearest_cargo_info()
+
+        # Determine controls
+        rotation = state.gamepad.right_x
+        if state.gamepad.bumper_right:
+            # Turn to hub
+            rotation = self.__pid(angle_to_hub)
+        elif state.gamepad.bumper_left:
+            # Turn to cargo
+            rotation = self.__pid(angle_to_nearest_cargo)
+
+        # Set controls
+        controls.rotate = rotation
+        return controls
+
+
+class IntakeCommand(Command):
+    '''Automated control of intake'''
+
+    class Mode(Enum):
+        '''Represents the mode'''
+        TWO_CARGO = 2
+        THREE_CARGO = 3
+
+    def __init__(self):
+        super().__init__()
+        self.__mode = IntakeCommand.Mode.THREE_CARGO
+
+    def execute(self, state: State, controls: Controls) -> Controls:
+        '''Execute'''
+        # Gather data
+        _, _, nearest_intake = state.nearest_cargo_info()
+
+        # Update mode
+        if state.gamepad.dpad_up and self.__mode != IntakeCommand.Mode.THREE_CARGO:
+            self.__mode = IntakeCommand.Mode.THREE_CARGO
+            print(f"Switching to {self.__mode.name}")
+        elif state.gamepad.dpad_down and self.__mode != IntakeCommand.Mode.TWO_CARGO:
+            self.__mode = IntakeCommand.Mode.TWO_CARGO
+            print(f"Switching to {self.__mode.name}")
+
+        # Determine controls
+        toggle_left_intake = state.gamepad.x
+        toggle_right_intake = state.gamepad.b
+        if self.__mode == IntakeCommand.Mode.TWO_CARGO:
+            if state.gamepad.bumper_right:
+                # Keep both intakes down in two cargo mode
+                toggle_left_intake = not state.robot.intake_up(IntakeSide.LEFT)
+                toggle_right_intake = not state.robot.intake_up(IntakeSide.RIGHT)
+            elif state.gamepad.bumper_left:
+                # TPut nearby intake down and put far intake up in two cargo mode
+                toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT) == (
+                        IntakeSide.LEFT == nearest_intake)
+                toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT) == (
+                        IntakeSide.RIGHT == nearest_intake)
+        elif self.__mode == IntakeCommand.Mode.THREE_CARGO:
+            # Keep both intakes down in all cargo mode
+            toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT)
+            toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT)
+
+        # Set controls
+        controls.toggle_left_intake = toggle_left_intake
+        controls.toggle_right_intake = toggle_right_intake
+        return controls
+
+
+class ShooterCommand(Command):
+    '''Automated control of shooter'''
+
+    def __init__(self):
+        super().__init__()
+        self.__three_cargo_start = None
+        self.__bypass_enabled = False
+
+    def execute(self, state: State, controls: Controls) -> Controls:
+        '''Execute'''
+        # Gather data
         cargo_in_robot = len(state.cargo_in_robot())
+
+        # Read controls
+        if state.gamepad.right_y < -0.875 and not self.__bypass_enabled:
+            print('Bypassing cargo limit')
+            self.__bypass_enabled = True
+        elif state.gamepad.right_y > 0.875 and self.__bypass_enabled:
+            print('Disabling bypass')
+            self.__bypass_enabled = False
 
         # Update cargo data
         if self.__three_cargo_start is None:
@@ -40,50 +118,9 @@ class MainCommand(Command):
                 self.__three_cargo_start = None
             else:
                 time_left = THREE_CARGO_TIME_LIMIT - (time.time() - self.__three_cargo_start)
-                if time_left < 0.25 and self.__mode != MainCommand.Mode.ALL_CARGO:
+                if time_left < 0.25 and not self.__bypass_enabled:
                     # Shoot cargo to avoid penalty
                     controls.shoot = True
-
-        # Update mode
-        if state.gamepad.right_y < -0.875 and self.__mode != MainCommand.Mode.ALL_CARGO:
-            self.__mode = MainCommand.Mode.ALL_CARGO
-            print(f"Switching to {self.__mode.name}")
-        if state.gamepad.dpad_up and self.__mode != MainCommand.Mode.THREE_CARGO:
-            self.__mode = MainCommand.Mode.THREE_CARGO
-            print(f"Switching to {self.__mode.name}")
-        elif state.gamepad.dpad_down and self.__mode != MainCommand.Mode.TWO_CARGO:
-            self.__mode = MainCommand.Mode.TWO_CARGO
-            print(f"Switching to {self.__mode.name}")
-
-        # Determine controls
-        rotation = state.gamepad.right_x
-        toggle_left_intake = state.gamepad.x
-        toggle_right_intake = state.gamepad.b
-        if state.gamepad.bumper_right:
-            # Turn to hub
-            rotation = self.__pid(angle_to_hub)
-            if self.__mode == MainCommand.Mode.TWO_CARGO:
-                # with both intakes up in two cargo mode
-                toggle_left_intake = not state.robot.intake_up(IntakeSide.LEFT)
-                toggle_right_intake = not state.robot.intake_up(IntakeSide.RIGHT)
-        elif state.gamepad.bumper_left:
-            # Turn to cargo
-            rotation = self.__pid(angle_to_nearest_cargo)
-            if self.__mode == MainCommand.Mode.TWO_CARGO:
-                # put nearby intake down and put far intake up in two cargo mode
-                toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT) == (
-                        IntakeSide.LEFT == nearest_intake)
-                toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT) == (
-                        IntakeSide.RIGHT == nearest_intake)
-        if self.__mode in [MainCommand.Mode.THREE_CARGO, MainCommand.Mode.ALL_CARGO]:
-            # Keep both intakes down in all cargo mode
-            toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT)
-            toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT)
-
-        # Set controls
-        controls.rotate = rotation
-        controls.toggle_left_intake = toggle_left_intake
-        controls.toggle_right_intake = toggle_right_intake
         return controls
 
 
@@ -133,7 +170,6 @@ class ClimberCommand(Command):
 
     def execute(self, state: State, controls: Controls) -> Controls:
         '''Execute'''
-
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position
         if state.game.phase not in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
@@ -173,12 +209,16 @@ class ClimberCommand(Command):
         return controls
 
 
+
 if __name__ == '__main__':
     gamepad = Gamepad()
-    main_command = MainCommand()
-    hood_command = HoodCommand()
-    climber_command = ClimberCommand()
-    commands: list[Command] = [main_command, hood_command, climber_command]
+    commands: list[Command] = [
+        RotationCommand(),
+        IntakeCommand(),
+        ShooterCommand(),
+        HoodCommand(),
+        ClimberCommand()
+    ]
 
     while True:
         start = time.time()
