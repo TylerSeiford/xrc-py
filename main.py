@@ -1,13 +1,34 @@
 import time
 from enum import Enum
 from simple_pid import PID
-from models import IntakeSide, GamePhase, Alliance, Controls, Gamepad, State, Command
+from models import IntakeSide, IntakePosition, GamePhase, Alliance, Controls, Gamepad, State, Command
 
 
 
 FPS: float = 100
 ALLIANCE: Alliance = Alliance.RED
 THREE_CARGO_TIME_LIMIT: float = 1.625
+
+
+
+class TranslationCommand(Command):
+    '''Automated control of rotation'''
+
+    def execute(self, state: State, controls: Controls) -> Controls:
+        '''Execute'''
+        if not state.gamepad.bumper_left or abs(state.gamepad.left_x) > 0.1:
+            return controls
+
+        (angle_to_nearest_cargo, distance_to_nearest_cargo,
+                nearest_intake) = state.nearest_cargo_info()
+        if abs(angle_to_nearest_cargo) > 30 or distance_to_nearest_cargo < 0.625:
+            return controls
+
+        if nearest_intake == IntakeSide.LEFT:
+            controls.strafe = -1.0
+        elif nearest_intake == IntakeSide.RIGHT:
+            controls.strafe = 1.0
+        return controls
 
 
 
@@ -64,27 +85,48 @@ class IntakeCommand(Command):
             print(f"Switching to {self.__mode.name}")
 
         # Determine controls
-        toggle_left_intake = state.gamepad.x
-        toggle_right_intake = state.gamepad.b
+        target_left_intake = IntakePosition.UNKNOWN
+        target_right_intake = IntakePosition.UNKNOWN
         if self.__mode == IntakeCommand.Mode.TWO_CARGO:
+            # Keep both intakes up when aiming and only nearby intake down when intaking
             if state.gamepad.bumper_right:
-                # Keep both intakes down in two cargo mode
-                toggle_left_intake = not state.robot.intake_up(IntakeSide.LEFT)
-                toggle_right_intake = not state.robot.intake_up(IntakeSide.RIGHT)
+                target_left_intake = IntakePosition.UP
+                target_right_intake = IntakePosition.UP
             elif state.gamepad.bumper_left:
-                # TPut nearby intake down and put far intake up in two cargo mode
-                toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT) == (
-                        IntakeSide.LEFT == nearest_intake)
-                toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT) == (
-                        IntakeSide.RIGHT == nearest_intake)
+                if nearest_intake == IntakeSide.LEFT:
+                    target_left_intake = IntakePosition.DOWN
+                    target_right_intake = IntakePosition.UP
+                elif nearest_intake == IntakeSide.RIGHT:
+                    target_left_intake = IntakePosition.UP
+                    target_right_intake = IntakePosition.DOWN
         elif self.__mode == IntakeCommand.Mode.THREE_CARGO:
-            # Keep both intakes down in all cargo mode
-            toggle_left_intake = state.robot.intake_up(IntakeSide.LEFT)
-            toggle_right_intake = state.robot.intake_up(IntakeSide.RIGHT)
+            # Keep both intakes down in three cargo mode
+            target_left_intake = IntakePosition.DOWN
+            target_right_intake = IntakePosition.DOWN
+        body_position = state.robot.body.global_position
+        if state.game.phase in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
+            # Keep both intakes up in the hangar in endgame
+            if ALLIANCE == Alliance.RED and body_position.x < -0.875 and body_position.z < -4.5:
+                target_left_intake = IntakePosition.UP
+                target_right_intake = IntakePosition.UP
+            elif ALLIANCE == Alliance.BLUE and body_position.x > 0.875 and body_position.z > 545:
+                target_left_intake = IntakePosition.UP
+                target_right_intake = IntakePosition.UP
+
+
+        # Allow manual override to opposite position while held
+        if target_left_intake != IntakePosition.UNKNOWN and state.gamepad.x:
+            target_left_intake = ~target_left_intake
+        if target_right_intake != IntakePosition.UNKNOWN and state.gamepad.b:
+            target_right_intake = ~target_right_intake
 
         # Set controls
-        controls.toggle_left_intake = toggle_left_intake
-        controls.toggle_right_intake = toggle_right_intake
+        if target_left_intake != IntakePosition.UNKNOWN:
+            controls.toggle_left_intake = (
+                    target_left_intake != state.robot.intake_position(IntakeSide.LEFT))
+        if target_right_intake != IntakePosition.UNKNOWN:
+            controls.toggle_right_intake = (
+                    target_right_intake != state.robot.intake_position(IntakeSide.RIGHT))
         return controls
 
 
@@ -172,17 +214,19 @@ class ClimberCommand(Command):
         '''Execute'''
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position
-        if state.game.phase not in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
-            # Keep arms retracted
-            target_angle = 0
-        elif ALLIANCE == Alliance.RED and body_position.x < -1.8 and body_position.z < -6.0:
-            controls.climber_extend = True
-            target_angle = 65
-        elif ALLIANCE == Alliance.BLUE and body_position.x > 1.8 and body_position.z > 6.0:
-            controls.climber_extend = True
-            target_angle = 65
+        if state.game.phase in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
+            if ALLIANCE == Alliance.RED and body_position.x < -0.875 and body_position.z < -4.5:
+                target_angle = 65
+                controls.climber_extend = True
+            elif ALLIANCE == Alliance.BLUE and body_position.x > 0.875 and body_position.z > 4.5:
+                target_angle = 65
+                controls.climber_extend = True
+            else:
+                target_angle = 0
+                controls.climber_retract = True
         else:
             # Keep arms retracted
+            controls.climber_retract = True
             target_angle = 0
 
         # Control arm angle
@@ -213,6 +257,7 @@ class ClimberCommand(Command):
 if __name__ == '__main__':
     gamepad = Gamepad()
     commands: list[Command] = [
+        TranslationCommand(),
         RotationCommand(),
         IntakeCommand(),
         ShooterCommand(),

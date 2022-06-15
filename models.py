@@ -153,6 +153,28 @@ class IntakeSide(Enum):
     RIGHT = 1
 
 
+class IntakePosition(Enum):
+    '''Represents the position'''
+    UP = 0
+    UNKNOWN = 1
+    DOWN = 2
+
+    @staticmethod
+    def from_y(y: float) -> 'IntakePosition':
+        '''Returns the position from a y coordinate'''
+        if y > 0.45:
+            return IntakePosition.UP
+        if y < 0.4:
+            return IntakePosition.DOWN
+        return IntakePosition.UNKNOWN
+
+    def __invert__(self):
+        match(self):
+            case IntakePosition.UP: return IntakePosition.DOWN
+            case IntakePosition.DOWN: return IntakePosition.UP
+            case IntakePosition.UNKNOWN: return IntakePosition.UNKNOWN
+
+
 @dataclass
 class RobotState:
     '''Represents the current state of a robot'''
@@ -213,11 +235,11 @@ class RobotState:
             parts
         )
 
-    def intake_up(self, side: IntakeSide) -> bool:
-        '''Returns whether the intake is up'''
+    def intake_position(self, side: IntakeSide) -> IntakePosition:
+        '''Returns the position of the intake'''
         if side is IntakeSide.LEFT:
-            return self.left_intake.local_position.y > 0.45
-        return self.right_intake.local_position.y > 0.45
+            return IntakePosition.from_y(self.left_intake.local_position.y)
+        return IntakePosition.from_y(self.right_intake.local_position.y)
 
     def __str__(self) -> str:
         return f"Robot @ {self.body.global_position}"
@@ -512,6 +534,7 @@ class State:
         if self.__nearest_cargo_info is None:
             self.__alliance_cargo_search()
         return self.__nearest_cargo_info
+
 
 class Command:
     '''Represents a command to modify the controls for the robot'''
