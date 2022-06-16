@@ -6,7 +6,7 @@ from models import IntakeSide, IntakePosition, GamePhase, Alliance, Controls, Ga
 
 
 FPS: float = 100
-ALLIANCE: Alliance = Alliance.RED
+ALLIANCE: Alliance = Alliance.BLUE
 THREE_CARGO_TIME_LIMIT: float = 1.625
 
 
@@ -109,7 +109,7 @@ class IntakeCommand(Command):
             if ALLIANCE == Alliance.RED and body_position.x < -0.875 and body_position.z < -4.5:
                 target_left_intake = IntakePosition.UP
                 target_right_intake = IntakePosition.UP
-            elif ALLIANCE == Alliance.BLUE and body_position.x > 0.875 and body_position.z > 545:
+            elif ALLIANCE == Alliance.BLUE and body_position.x > 0.875 and body_position.z > 4.5:
                 target_left_intake = IntakePosition.UP
                 target_right_intake = IntakePosition.UP
 
