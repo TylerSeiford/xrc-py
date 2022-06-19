@@ -107,6 +107,16 @@ class Element:
         return f"{self.name} @ {self.global_position}"
 
 
+@dataclass
+class GameElementState:
+    '''Represents the current state of the game'''
+
+    @staticmethod
+    def read(file: TextIOWrapper) -> 'GameElementState':
+        '''Returns the current state of the game'''
+        return GameElementState()
+
+
 class Alliance(Enum):
     '''Represents the alliance of the robot'''
     RED = 0
