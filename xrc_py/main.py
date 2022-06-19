@@ -1,7 +1,8 @@
 import time
 from enum import Enum
 from simple_pid import PID
-from models import IntakeSide, IntakePosition, GamePhase, Alliance, Controls, Gamepad, State, Command
+from models import Gamepad, Alliance, GamePhase
+from robot_specific_models import Command, State, Controls, IntakeSide, IntakePosition
 
 
 
@@ -256,14 +257,14 @@ class ClimberCommand(Command):
 
 if __name__ == '__main__':
     gamepad = Gamepad()
-    commands: list[Command] = [
+    commands: tuple[Command] = (
         TranslationCommand(),
         RotationCommand(),
         IntakeCommand(),
         ShooterCommand(),
         HoodCommand(),
         ClimberCommand()
-    ]
+    )
 
     while True:
         start = time.time()
@@ -273,7 +274,7 @@ if __name__ == '__main__':
             state = State.read(game_file, element_file, robot_file, gamepad, ALLIANCE)
             if state is None:
                 continue
-            control_outputs = state.gamepad.default()
+            control_outputs = Controls.from_gamepad_state(state.gamepad)
             for command in commands:
                 control_outputs = command.execute(state, control_outputs)
             control_outputs.write()
