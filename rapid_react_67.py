@@ -5,7 +5,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State
+from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State
 from rapid_react import RapidReactGameElementState
 
 
@@ -276,12 +276,12 @@ class RR67Controls(Controls):
         ).write()
 
 
-class Command:
+class RR67Command(Command):
     '''Represents a command to modify the controls for the robot'''
     def __init__(self):
         pass
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Executes the command'''
         return controls
 
@@ -291,10 +291,10 @@ THREE_CARGO_TIME_LIMIT: float = 1.625
 
 
 
-class TranslationCommand(Command):
+class TranslationCommand(RR67Command):
     '''Automated control of rotation'''
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         if not state.gamepad.bumper_left or abs(state.gamepad.left_x) > 0.1:
             return controls
@@ -311,14 +311,14 @@ class TranslationCommand(Command):
         return controls
 
 
-class RotationCommand(Command):
+class RotationCommand(RR67Command):
     '''Automated control of rotation'''
 
     def __init__(self):
         super().__init__()
         self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         angle_to_hub = state.angle_to_hub()
@@ -338,7 +338,7 @@ class RotationCommand(Command):
         return controls
 
 
-class IntakeCommand(Command):
+class IntakeCommand(RR67Command):
     '''Automated control of intake'''
 
     class Mode(Enum):
@@ -350,7 +350,7 @@ class IntakeCommand(Command):
         super().__init__()
         self.__mode = IntakeCommand.Mode.THREE_CARGO
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         _, _, nearest_intake = state.nearest_cargo_info()
@@ -411,7 +411,7 @@ class IntakeCommand(Command):
         return controls
 
 
-class ShooterCommand(Command):
+class ShooterCommand(RR67Command):
     '''Automated control of shooter'''
 
     def __init__(self):
@@ -419,7 +419,7 @@ class ShooterCommand(Command):
         self.__three_cargo_start = None
         self.__bypass_enabled = False
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         cargo_in_robot = len(state.cargo_in_robot())
@@ -447,13 +447,13 @@ class ShooterCommand(Command):
         return controls
 
 
-class HoodCommand(Command):
+class HoodCommand(RR67Command):
     '''Automated control of the hood based on Eliot's angles'''
     def __init__(self):
         super().__init__()
         self.__pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         HOOD_ANGLES = [
             165,  155,  147,  145, 140,
@@ -485,13 +485,13 @@ class HoodCommand(Command):
         return controls
 
 
-class ClimberCommand(Command):
+class ClimberCommand(RR67Command):
     '''Automated control of the climber'''
     def __init__(self):
         super().__init__()
         self.__pid = PID(-0.100, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
 
-    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
+    def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position
@@ -537,11 +537,28 @@ class ClimberCommand(Command):
 
 
 
-COMMANDS: tuple[Command] = (
-    TranslationCommand(),
-    RotationCommand(),
-    IntakeCommand(),
-    ShooterCommand(),
-    HoodCommand(),
-    ClimberCommand()
-)
+class RR67AutomationProvider(AutomationProvider):
+    '''Automated control of the Rapid React 67 robot'''
+
+    def __init__(self):
+        super().__init__()
+        self.__commands: tuple[RR67Command] = (
+            TranslationCommand(),
+            RotationCommand(),
+            IntakeCommand(),
+            ShooterCommand(),
+            HoodCommand(),
+            ClimberCommand()
+        )
+
+    def __call__(self, game_file: TextIOWrapper, element_file: TextIOWrapper,
+            robot_file: TextIOWrapper, gamepad: Gamepad,
+            alliance: Alliance) -> None:
+        '''Execute'''
+        state = RR67State.read(game_file, element_file, robot_file, gamepad, alliance)
+        if state is None:
+            return
+        control_outputs = RR67Controls.from_gamepad_state(state.gamepad)
+        for command in self.__commands:
+            control_outputs = command(state, control_outputs)
+        control_outputs.write()

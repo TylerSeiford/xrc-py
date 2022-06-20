@@ -7,7 +7,7 @@ import pygame
 
 
 
-# Base classews
+# Base classes
 @dataclass
 class Vector:
     '''Represents a vector in 3D space'''
@@ -321,3 +321,21 @@ class Controls:
 
     def write(self) -> None:
         '''Default controls for the robot'''
+
+
+class Command:
+    '''Represents a command to modify the controls for the robot'''
+
+    def __call__(self, state: State, controls: Controls) -> Controls:
+        '''Executes the command'''
+        return controls
+
+
+class AutomationProvider:
+    '''Abstract class to represent a full automation system'''
+
+    def __call__(self,
+            game_file: TextIOWrapper, element_file: TextIOWrapper,
+            robot_file: TextIOWrapper, gamepad: Gamepad,
+            alliance: Alliance) -> None:
+        '''Applies automation to the current game'''
