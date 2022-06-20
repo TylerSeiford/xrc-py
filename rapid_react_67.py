@@ -5,7 +5,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput
+from models import Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State
 from rapid_react import RapidReactGameElementState
 
 
@@ -39,7 +39,7 @@ class IntakePosition(Enum):
 
 
 @dataclass
-class RobotState:
+class RR67RobotState(RobotState):
     '''Represents the current state of a robot'''
     body: Element
     hood: Element
@@ -52,7 +52,7 @@ class RobotState:
     parts: list[Element]
 
     @staticmethod
-    def read(file: TextIOWrapper) -> 'RobotState':
+    def read(file: TextIOWrapper) -> 'RR67RobotState':
         '''Returns the current state of the robot'''
         raw = file.read()
         raw = raw.strip()
@@ -90,7 +90,7 @@ class RobotState:
                 climber_hook_2 = element
             else:
                 parts.append(element)
-        return RobotState(
+        return RR67RobotState(
             body, hood,
             left_intake, right_intake,
             climber_arm_1, climber_arm_2,
@@ -109,9 +109,9 @@ class RobotState:
 
 
 @dataclass
-class State:
+class RR67State(State):
     '''Represents the current state of everything'''
-    robot: RobotState
+    robot: RR67RobotState
     elements: RapidReactGameElementState
     game: GameState
     gamepad: GamepadState
@@ -126,14 +126,14 @@ class State:
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
             robot_file: TextIOWrapper, gamepad: Gamepad,
-            alliance: Alliance) -> 'State':
+            alliance: Alliance) -> 'RR67State':
         '''Reads the current state from the files'''
         try:
             game_state = GameState.read(game_file)
             element_state = RapidReactGameElementState.read(element_file)
-            robot_state = RobotState.read(robot_file)
+            robot_state = RR67RobotState.read(robot_file)
             gamepad_state = gamepad.read()
-            return State(robot_state, element_state, game_state, gamepad_state, alliance)
+            return RR67State(robot_state, element_state, game_state, gamepad_state, alliance)
         except json.JSONDecodeError:
             return None # Error reading file, try again
         except ValueError:
@@ -227,7 +227,7 @@ class State:
 
 
 @dataclass
-class Controls:
+class RR67Controls(Controls):
     '''Represents the current controls for a robot'''
     reverse_intake: bool
     toggle_right_intake: bool
@@ -250,9 +250,9 @@ class Controls:
     precision: float = 0.3
 
     @staticmethod
-    def from_gamepad_state(gamepad: GamepadState) -> 'Controls':
+    def from_gamepad_state(gamepad: GamepadState) -> 'RR67Controls':
         '''Returns the default controls'''
-        return Controls(gamepad.a, gamepad.b, gamepad.x, gamepad.y,
+        return RR67Controls(gamepad.a, gamepad.b, gamepad.x, gamepad.y,
                 gamepad.dpad_down, gamepad.dpad_up, gamepad.dpad_right, gamepad.dpad_left,
                 gamepad.bumper_left, gamepad.bumper_right,
                 gamepad.start, gamepad.back,
@@ -262,11 +262,18 @@ class Controls:
 
     def write(self) -> None:
         '''Default controls for the robot'''
-        return ControlOutput(self.reverse_intake, self.toggle_right_intake, self.toggle_left_intake,
-                      self.shoot, self.aim_down, self.aim_up, self.climber_retract,
-                      self.climber_extend, self.precision_left, self.precision_right,
-                      self.stop, self.restart, self.right_y, self.rotate, self.forward_reverse,
-                      self.strafe, self.climber_reverse, self.climber_forward, self.precision).write()
+        return ControlOutput(
+            self.reverse_intake, self.toggle_right_intake, self.toggle_left_intake,
+            self.shoot,
+            self.aim_down, self.aim_up,
+            self.climber_retract, self.climber_extend,
+            self.precision_left, self.precision_right,
+            self.stop, self.restart,
+            self.right_y, self.rotate,
+            self.forward_reverse, self.strafe,
+            self.climber_reverse, self.climber_forward,
+            self.precision
+        ).write()
 
 
 class Command:
@@ -274,7 +281,7 @@ class Command:
     def __init__(self):
         pass
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Executes the command'''
         return controls
 
@@ -287,7 +294,7 @@ THREE_CARGO_TIME_LIMIT: float = 1.625
 class TranslationCommand(Command):
     '''Automated control of rotation'''
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         if not state.gamepad.bumper_left or abs(state.gamepad.left_x) > 0.1:
             return controls
@@ -311,7 +318,7 @@ class RotationCommand(Command):
         super().__init__()
         self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         angle_to_hub = state.angle_to_hub()
@@ -343,7 +350,7 @@ class IntakeCommand(Command):
         super().__init__()
         self.__mode = IntakeCommand.Mode.THREE_CARGO
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         _, _, nearest_intake = state.nearest_cargo_info()
@@ -412,7 +419,7 @@ class ShooterCommand(Command):
         self.__three_cargo_start = None
         self.__bypass_enabled = False
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Gather data
         cargo_in_robot = len(state.cargo_in_robot())
@@ -446,7 +453,7 @@ class HoodCommand(Command):
         super().__init__()
         self.__pid = PID(0.100, 0.001, 0.000, setpoint=0, output_limits=(-4, 4))
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         HOOD_ANGLES = [
             165,  155,  147,  145, 140,
@@ -484,7 +491,7 @@ class ClimberCommand(Command):
         super().__init__()
         self.__pid = PID(-0.100, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def execute(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position

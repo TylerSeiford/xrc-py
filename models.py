@@ -7,6 +7,7 @@ import pygame
 
 
 
+# Base classews
 @dataclass
 class Vector:
     '''Represents a vector in 3D space'''
@@ -105,16 +106,6 @@ class Element:
 
     def __str__(self) -> str:
         return f"{self.name} @ {self.global_position}"
-
-
-@dataclass
-class GameElementState:
-    '''Represents the current state of the game'''
-
-    @staticmethod
-    def read(file: TextIOWrapper) -> 'GameElementState':
-        '''Returns the current state of the game'''
-        return GameElementState()
 
 
 class Alliance(Enum):
@@ -278,3 +269,55 @@ class ControlOutput:
             file.write(f"trigger_l={self.trigger_l}\n")
             file.write(f"trigger_r={self.trigger_r}\n")
             file.write(f"precision={self.precision}\n")
+
+
+
+# Generic classes
+@dataclass
+class GameElementState:
+    '''Represents the current state of the game'''
+
+    @staticmethod
+    def read(file: TextIOWrapper) -> 'GameElementState':
+        '''Returns the current state of the game'''
+        return GameElementState()
+
+
+@dataclass
+class RobotState:
+    '''Represents the current state of a robot'''
+
+    @staticmethod
+    def read(file: TextIOWrapper) -> 'RobotState':
+        '''Returns the current state of the robot'''
+        return RobotState()
+
+
+@dataclass
+class State:
+    '''Represents the current state of everything'''
+    robot: RobotState
+    elements: GameElementState
+    game: GameState
+    gamepad: GamepadState
+    alliance: Alliance
+
+    @staticmethod
+    def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
+            robot_file: TextIOWrapper, gamepad: Gamepad,
+            alliance: Alliance) -> 'State':
+        '''Reads the current state from the files'''
+        return State(None, None, None, None, alliance)
+
+
+@dataclass
+class Controls:
+    '''Represents the current controls for a robot'''
+
+    @staticmethod
+    def from_gamepad_state(gamepad: GamepadState) -> 'Controls':
+        '''Returns the default controls'''
+        return Controls()
+
+    def write(self) -> None:
+        '''Default controls for the robot'''
