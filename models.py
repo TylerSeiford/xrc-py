@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from io import TextIOWrapper
+import math
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
 import pygame
@@ -339,3 +340,46 @@ class AutomationProvider:
             robot_file: TextIOWrapper, gamepad: Gamepad,
             alliance: Alliance) -> None:
         '''Applies automation to the current game'''
+
+
+# Utility classes
+class Util:
+    '''Utility class'''
+
+    @staticmethod
+    def fix_angle(angle: float) -> float:
+        '''Fixes the angle to be between -180 and 180'''
+        while angle < -180:
+            angle += 360
+        while angle > 180:
+            angle -= 360
+        return angle
+
+    @staticmethod
+    def nearest_element(position: Vector, elements: list[Element],
+            min_distance: float = 0, max_y: float = 0) -> Element:
+        '''Returns the nearest element to the position'''
+        nearest = None
+        nearest_distance = float('inf')
+        for element in elements:
+            difference = position - element.global_position
+            distance = math.hypot(difference.x, difference.y, difference.z)
+            if distance < min_distance:
+                pass # Element is too close
+            elif difference.y < max_y:
+                pass # Element is too high
+            elif distance < nearest_distance:
+                nearest = element
+                nearest_distance = distance
+        return nearest
+
+    @staticmethod
+    def elements_within(position: Vector, elements: list[Element],
+            distance: float) -> list[Element]:
+        '''Returns the elements within the distance'''
+        result = []
+        for element in elements:
+            difference = position - element.global_position
+            if math.hypot(difference.x, difference.y, difference.z) < distance:
+                result.append(element)
+        return result

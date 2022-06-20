@@ -5,7 +5,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State
+from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State, Util
 from rapid_react import RapidReactGameElementState
 
 
@@ -159,10 +159,7 @@ class RR67State(State):
         '''Returns the angle to the hub from the robot'''
         if self.__angle_to_hub is None:
             self.__angle_to_hub = self.angle_from_hub() - self.robot.body.global_rotation.y + 90
-            if self.__angle_to_hub < -180:
-                self.__angle_to_hub += 360
-            elif self.__angle_to_hub > 180:
-                self.__angle_to_hub -= 360
+            self.__angle_to_hub = Util.fix_angle(self.__angle_to_hub)
         return self.__angle_to_hub
 
     def __alliance_cargo_search(self) -> None:
@@ -172,27 +169,19 @@ class RR67State(State):
         else:
             alliance_cargo = self.elements.red_cargo
         nearest_distance = float('inf')
-        nearest_vector = None
-        nearest = None
-        cargo_in_bot = []
-        for cargo in alliance_cargo:
-            difference = self.robot.body.global_position - cargo.global_position
-            distance = math.hypot(difference.x, difference.y, difference.z)
-            if distance < 0.4:
-                # Cargo is in robot
-                cargo_in_bot.append(cargo)
-            elif difference.y < -0.5:
-                pass # Cargo is too high
-            elif distance < nearest_distance:
-                nearest_distance = distance
-                nearest_vector = difference
-                nearest = cargo
+        nearest = Util.nearest_element(
+            self.robot.body.global_position, alliance_cargo,
+            0.4, -0.5
+        )
+        cargo_in_bot = Util.elements_within(
+            self.robot.body.global_position,
+            self.elements.blue_cargo + self.elements.red_cargo,
+            0.4
+        )
+        nearest_vector = self.robot.body.global_position - nearest.global_position
         angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
         angle = angle - self.robot.body.global_rotation.y
-        if angle < -180:
-            angle += 360
-        elif angle > 180:
-            angle -= 360
+        angle = Util.fix_angle(angle)
 
         # Wrap angle for dual intakes
         if angle > 90:
@@ -425,10 +414,10 @@ class ShooterCommand(RR67Command):
         cargo_in_robot = len(state.cargo_in_robot())
 
         # Read controls
-        if state.gamepad.right_y < -0.875 and not self.__bypass_enabled:
+        if state.gamepad.right_y < -0.9375 and not self.__bypass_enabled:
             print('Bypassing cargo limit')
             self.__bypass_enabled = True
-        elif state.gamepad.right_y > 0.875 and self.__bypass_enabled:
+        elif state.gamepad.right_y > 0.25 and self.__bypass_enabled:
             print('Disabling bypass')
             self.__bypass_enabled = False
 
