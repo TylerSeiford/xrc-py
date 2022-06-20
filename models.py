@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 from io import TextIOWrapper
-import json
 import math
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
@@ -9,6 +8,7 @@ import pygame
 
 
 
+# Base classes
 @dataclass
 class Vector:
     '''Represents a vector in 3D space'''
@@ -109,193 +109,10 @@ class Element:
         return f"{self.name} @ {self.global_position}"
 
 
-@dataclass
-class GameElementState:
-    '''Represents the current state of the game'''
-    red_cargo: list[Element]
-    blue_cargo: list[Element]
-    misc : list[Element]
-
-    @staticmethod
-    def read(file: TextIOWrapper) -> 'GameElementState':
-        '''Returns the current state of the game'''
-        raw = file.read()
-        raw = raw.strip()
-        raw = json.loads(raw)
-        elements = []
-        for raw_object in raw['objects']:
-            elements.append(Element.from_json(raw_object))
-        red_cargo = []
-        blue_cargo = []
-        misc = []
-        for element in elements:
-            if element.element_type is None:
-                misc.append(element)
-            elif 'Ball_Red' in element.name:
-                red_cargo.append(element)
-            elif 'Ball_Blue' in element.name:
-                blue_cargo.append(element)
-            else:
-                misc.append(element)
-        red_cargo.sort(key=lambda i: i.identifier)
-        blue_cargo.sort(key=lambda i: i.identifier)
-        return GameElementState(red_cargo, blue_cargo, misc)
-
-    def __str__(self) -> str:
-        return f"{[str(item) for item in self.red_cargo]}\n" \
-            f"{[str(item) for item in self.blue_cargo]}\n" \
-            f"{[str(item) for item in self.misc]}"
-
-
-class IntakeSide(Enum):
-    '''Represents the side of intake'''
-    LEFT = 0
-    RIGHT = 1
-
-
-class IntakePosition(Enum):
-    '''Represents the position'''
-    UP = 0
-    UNKNOWN = 1
-    DOWN = 2
-
-    @staticmethod
-    def from_y(y: float) -> 'IntakePosition':
-        '''Returns the position from a y coordinate'''
-        if y > 0.45:
-            return IntakePosition.UP
-        if y < 0.4:
-            return IntakePosition.DOWN
-        return IntakePosition.UNKNOWN
-
-    def __invert__(self):
-        match(self):
-            case IntakePosition.UP: return IntakePosition.DOWN
-            case IntakePosition.DOWN: return IntakePosition.UP
-            case IntakePosition.UNKNOWN: return IntakePosition.UNKNOWN
-
-
-@dataclass
-class RobotState:
-    '''Represents the current state of a robot'''
-    body: Element
-    hood: Element
-    left_intake: Element
-    right_intake: Element
-    climber_arm_1: Element
-    climber_arm_2: Element
-    climber_hook_1: Element
-    climber_hook_2: Element
-    parts: list[Element]
-
-    @staticmethod
-    def read(file: TextIOWrapper) -> 'RobotState':
-        '''Returns the current state of the robot'''
-        raw = file.read()
-        raw = raw.strip()
-        raw = json.loads(raw)
-        elements = []
-        for raw_object in raw['myrobot']:
-            elements.append(Element.from_json(raw_object))
-        body = None
-        hood = None
-        left_intake = None
-        right_intake = None
-        climber_arm_1 = None
-        climber_arm_2 = None
-        climber_hook_1 = None
-        climber_hook_2 = None
-        parts = []
-        for element in elements:
-            if element.name is None:
-                parts.append(element)
-            elif 'Body' in element.name:
-                body = element
-            elif 'Indicator' in element.name:
-                hood = element
-            elif 'IntakeFlap1' in element.name:
-                left_intake = element
-            elif 'IntakeFlap2' in element.name:
-                right_intake = element
-            elif 'arm1' in element.name:
-                climber_arm_1 = element
-            elif 'arm2' in element.name:
-                climber_arm_2 = element
-            elif 'Hook1' in element.name:
-                climber_hook_1 = element
-            elif 'Hook2' in element.name:
-                climber_hook_2 = element
-            else:
-                parts.append(element)
-        return RobotState(
-            body, hood,
-            left_intake, right_intake,
-            climber_arm_1, climber_arm_2,
-            climber_hook_1, climber_hook_2,
-            parts
-        )
-
-    def intake_position(self, side: IntakeSide) -> IntakePosition:
-        '''Returns the position of the intake'''
-        if side is IntakeSide.LEFT:
-            return IntakePosition.from_y(self.left_intake.local_position.y)
-        return IntakePosition.from_y(self.right_intake.local_position.y)
-
-    def __str__(self) -> str:
-        return f"Robot @ {self.body.global_position}"
-
-
 class Alliance(Enum):
     '''Represents the alliance of the robot'''
     RED = 0
     BLUE = 1
-
-
-@dataclass
-class Controls:
-    '''Represents the current controls for a robot'''
-    reverse_intake: bool
-    toggle_right_intake: bool
-    toggle_left_intake: bool
-    shoot: bool
-    aim_down: bool
-    aim_up: bool
-    climber_extend: bool
-    climber_retract: bool
-    precision_left: bool
-    precision_right: bool
-    stop: bool
-    restart: bool
-    right_y: float
-    rotate: float
-    forward_reverse: float
-    strafe: float
-    climber_reverse: float
-    climber_forward: float
-    precision: float = 0.3
-
-    def write(self) -> None:
-        '''Writes the current controls to the game'''
-        with open('Controls.txt', 'w', encoding='UTF+8') as file:
-            file.write(f"a={1 if self.reverse_intake else 0}\n")
-            file.write(f"b={1 if self.toggle_right_intake else 0}\n")
-            file.write(f"x={1 if self.toggle_left_intake else 0}\n")
-            file.write(f"y={1 if self.shoot else 0}\n")
-            file.write(f"dpad_down={1 if self.aim_down else 0}\n")
-            file.write(f"dpad_up={1 if self.aim_up else 0}\n")
-            file.write(f"dpad_left={1 if self.climber_retract else 0}\n")
-            file.write(f"dpad_right={1 if self.climber_extend else 0}\n")
-            file.write(f"bumper_l={1 if self.precision_left else 0}\n")
-            file.write(f"bumper_r={1 if self.precision_right else 0}\n")
-            file.write(f"stop={1 if self.stop else 0}\n")
-            file.write(f"restart={1 if self.restart else 0}\n")
-            file.write(f"right_y={self.right_y}\n")
-            file.write(f"right_x={self.rotate}\n")
-            file.write(f"left_y={self.forward_reverse}\n")
-            file.write(f"left_x={self.strafe}\n")
-            file.write(f"trigger_l={self.climber_reverse}\n")
-            file.write(f"trigger_r={self.climber_forward}\n")
-            file.write(f"precision={self.precision}\n")
 
 
 class GamePhase(Enum):
@@ -360,16 +177,6 @@ class GamepadState:
     trigger_left: float
     trigger_right: float
 
-    def default(self) -> Controls:
-        '''Returns the default controls'''
-        return Controls(self.a, self.b, self.x, self.y,
-                self.dpad_down, self.dpad_up, self.dpad_right, self.dpad_left,
-                self.bumper_left, self.bumper_right,
-                self.start, self.back,
-                self.right_y, self.right_x,
-                self.left_y, self.left_x,
-                self.trigger_left, self.trigger_right)
-
 
 class Gamepad:
     '''Represents the gamepad'''
@@ -419,128 +226,160 @@ class Gamepad:
 
 
 @dataclass
+class ControlOutput:
+    '''Represents the control outputs to the game'''
+    a: bool
+    b: bool
+    x: bool
+    y: bool
+    dpad_down: bool
+    dpad_up: bool
+    dpad_left: bool
+    dpad_right: bool
+    bumper_l: bool
+    bumper_r: bool
+    stop: bool
+    restart: bool
+    right_y: float
+    right_x: float
+    left_y: float
+    left_x: float
+    trigger_l: float
+    trigger_r: float
+    precision: float
+
+    def write(self) -> None:
+        '''Writes the current output to the game'''
+        with open('Controls.txt', 'w', encoding='UTF+8') as file:
+            file.write(f"a={1 if self.a else 0}\n")
+            file.write(f"b={1 if self.b else 0}\n")
+            file.write(f"x={1 if self.x else 0}\n")
+            file.write(f"y={1 if self.y else 0}\n")
+            file.write(f"dpad_down={1 if self.dpad_down else 0}\n")
+            file.write(f"dpad_up={1 if self.dpad_up else 0}\n")
+            file.write(f"dpad_left={1 if self.dpad_left else 0}\n")
+            file.write(f"dpad_right={1 if self.dpad_right else 0}\n")
+            file.write(f"bumper_l={1 if self.bumper_l else 0}\n")
+            file.write(f"bumper_r={1 if self.bumper_r else 0}\n")
+            file.write(f"stop={1 if self.stop else 0}\n")
+            file.write(f"restart={1 if self.restart else 0}\n")
+            file.write(f"right_y={self.right_y}\n")
+            file.write(f"right_x={self.right_x}\n")
+            file.write(f"left_y={self.left_y}\n")
+            file.write(f"left_x={self.left_x}\n")
+            file.write(f"trigger_l={self.trigger_l}\n")
+            file.write(f"trigger_r={self.trigger_r}\n")
+            file.write(f"precision={self.precision}\n")
+
+
+
+# Generic classes
+@dataclass
+class GameElementState:
+    '''Represents the current state of the game'''
+
+    @staticmethod
+    def read(file: TextIOWrapper) -> 'GameElementState':
+        '''Returns the current state of the game'''
+        return GameElementState()
+
+
+@dataclass
+class RobotState:
+    '''Represents the current state of a robot'''
+
+    @staticmethod
+    def read(file: TextIOWrapper) -> 'RobotState':
+        '''Returns the current state of the robot'''
+        return RobotState()
+
+
+@dataclass
 class State:
     '''Represents the current state of everything'''
     robot: RobotState
     elements: GameElementState
     game: GameState
     gamepad: GamepadState
-    __alliance: Alliance
-    __distance_to_hub: float = None
-    __angle_from_hub: float = None
-    __angle_to_hub: float = None
-    __alliance_cargo_in_robot: list[Element] = None
-    __nearest_cargo: Element = None
-    __nearest_cargo_info: tuple[float, float, IntakeSide] = None
+    alliance: Alliance
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
             robot_file: TextIOWrapper, gamepad: Gamepad,
             alliance: Alliance) -> 'State':
         '''Reads the current state from the files'''
-        try:
-            game_state = GameState.read(game_file)
-            element_state = GameElementState.read(element_file)
-            robot_state = RobotState.read(robot_file)
-            gamepad_state = gamepad.read()
-            return State(robot_state, element_state, game_state, gamepad_state, alliance)
-        except json.JSONDecodeError:
-            return None # Error reading file, try again
-        except ValueError:
-            return None # Error reading file, try again
+        return State(None, None, None, None, alliance)
 
-    def distance_to_hub(self) -> float:
-        '''Returns the distance to the hub'''
-        if self.__distance_to_hub is None:
-            self.__distance_to_hub = math.hypot(
-                    self.robot.body.global_position.x,
-                    self.robot.body.global_position.z
-            )
-        return  self.__distance_to_hub
 
-    def angle_from_hub(self) -> float:
-        '''Returns the angle from the hub to the robot'''
-        if self.__angle_from_hub is None:
-            self.__angle_from_hub = math.degrees(math.atan2(self.robot.body.global_position.x,
-                    self.robot.body.global_position.z))
-        return self.__angle_from_hub
+@dataclass
+class Controls:
+    '''Represents the current controls for a robot'''
 
-    def angle_to_hub(self) -> float:
-        '''Returns the angle to the hub from the robot'''
-        if self.__angle_to_hub is None:
-            self.__angle_to_hub = self.angle_from_hub() - self.robot.body.global_rotation.y + 90
-            if self.__angle_to_hub < -180:
-                self.__angle_to_hub += 360
-            elif self.__angle_to_hub > 180:
-                self.__angle_to_hub -= 360
-        return self.__angle_to_hub
+    @staticmethod
+    def from_gamepad_state(gamepad: GamepadState) -> 'Controls':
+        '''Returns the default controls'''
+        return Controls()
 
-    def __alliance_cargo_search(self) -> None:
-        '''Find the angle & distance to nearest cargo, nearest intake, and # of cargo in robot'''
-        if self.__alliance == Alliance.BLUE:
-            alliance_cargo = self.elements.blue_cargo
-        else:
-            alliance_cargo = self.elements.red_cargo
-        nearest_distance = float('inf')
-        nearest_vector = None
-        nearest = None
-        cargo_in_bot = []
-        for cargo in alliance_cargo:
-            difference = self.robot.body.global_position - cargo.global_position
-            distance = math.hypot(difference.x, difference.y, difference.z)
-            if distance < 0.4:
-                # Cargo is in robot
-                cargo_in_bot.append(cargo)
-            elif difference.y < -0.5:
-                pass # Cargo is too high
-            elif distance < nearest_distance:
-                nearest_distance = distance
-                nearest_vector = difference
-                nearest = cargo
-        angle = math.degrees(math.atan2(nearest_vector.x, nearest_vector.z))
-        angle = angle - self.robot.body.global_rotation.y
-        if angle < -180:
-            angle += 360
-        elif angle > 180:
-            angle -= 360
-
-        # Wrap angle for dual intakes
-        if angle > 90:
-            angle -= 180
-            intake = IntakeSide.LEFT
-        elif angle < -90:
-            angle += 180
-            intake = IntakeSide.LEFT
-        else:
-            intake = IntakeSide.RIGHT
-        self.__nearest_cargo = nearest
-        self.__nearest_cargo_info = (angle, nearest_distance, intake)
-        self.__alliance_cargo_in_robot = cargo_in_bot
-
-    def cargo_in_robot(self) -> list[Element]:
-        '''Returns the cargo in the robot'''
-        if self.__alliance_cargo_in_robot is None:
-            self.__alliance_cargo_search()
-        return self.__alliance_cargo_in_robot
-
-    def nearest_cargo(self) -> Element:
-        '''Returns the nearest cargo'''
-        if self.__nearest_cargo is None:
-            self.__alliance_cargo_search()
-        return self.__nearest_cargo
-
-    def nearest_cargo_info(self) -> tuple[float, float, IntakeSide]:
-        '''Returns the angle to, distance to, and intake closest to the nearest cargo'''
-        if self.__nearest_cargo_info is None:
-            self.__alliance_cargo_search()
-        return self.__nearest_cargo_info
+    def write(self) -> None:
+        '''Default controls for the robot'''
 
 
 class Command:
     '''Represents a command to modify the controls for the robot'''
-    def __init__(self):
-        pass
 
-    def execute(self, state: State, controls: Controls) -> Controls:
+    def __call__(self, state: State, controls: Controls) -> Controls:
         '''Executes the command'''
         return controls
+
+
+class AutomationProvider:
+    '''Abstract class to represent a full automation system'''
+
+    def __call__(self,
+            game_file: TextIOWrapper, element_file: TextIOWrapper,
+            robot_file: TextIOWrapper, gamepad: Gamepad,
+            alliance: Alliance) -> None:
+        '''Applies automation to the current game'''
+
+
+# Utility classes
+class Util:
+    '''Utility class'''
+
+    @staticmethod
+    def fix_angle(angle: float) -> float:
+        '''Fixes the angle to be between -180 and 180'''
+        while angle < -180:
+            angle += 360
+        while angle > 180:
+            angle -= 360
+        return angle
+
+    @staticmethod
+    def nearest_element(position: Vector, elements: list[Element],
+            min_distance: float = 0, max_y: float = 0) -> Element:
+        '''Returns the nearest element to the position'''
+        nearest = None
+        nearest_distance = float('inf')
+        for element in elements:
+            difference = position - element.global_position
+            distance = math.hypot(difference.x, difference.y, difference.z)
+            if distance < min_distance:
+                pass # Element is too close
+            elif difference.y < max_y:
+                pass # Element is too high
+            elif distance < nearest_distance:
+                nearest = element
+                nearest_distance = distance
+        return nearest
+
+    @staticmethod
+    def elements_within(position: Vector, elements: list[Element],
+            distance: float) -> list[Element]:
+        '''Returns the elements within the distance'''
+        result = []
+        for element in elements:
+            difference = position - element.global_position
+            if math.hypot(difference.x, difference.y, difference.z) < distance:
+                result.append(element)
+        return result
