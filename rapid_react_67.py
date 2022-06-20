@@ -10,6 +10,10 @@ from rapid_react import RapidReactGameElementState
 
 
 
+THREE_CARGO_TIME_LIMIT: float = 1.625
+
+
+
 class IntakeSide(Enum):
     '''Represents the side of intake'''
     LEFT = 0
@@ -273,10 +277,6 @@ class RR67Command(Command):
     def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Executes the command'''
         return controls
-
-
-
-THREE_CARGO_TIME_LIMIT: float = 1.625
 
 
 
