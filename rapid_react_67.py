@@ -1,11 +1,12 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from io import TextIOWrapper
 import json
 import math
 import time
 from simple_pid import PID
-from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, RobotState, State, Util
+from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, Logger, RobotState, State, Util
 from rapid_react import RapidReactGameElementState
 
 
@@ -318,6 +319,12 @@ class RotationCommand(RR67Command):
         if state.gamepad.bumper_right:
             # Turn to hub
             rotation = self.__pid(angle_to_hub)
+            Logger.log(
+                f"{datetime.isoformat(datetime.now())},"
+                f"{state.robot.body.global_rotation.y + 90},"
+                f"{angle_to_hub},"
+                f"{rotation}"
+            )
         elif state.gamepad.bumper_left:
             # Turn to cargo
             rotation = self.__pid(angle_to_nearest_cargo)

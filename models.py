@@ -383,3 +383,21 @@ class Util:
             if math.hypot(difference.x, difference.y, difference.z) < distance:
                 result.append(element)
         return result
+
+
+class Logger:
+    '''Logger'''
+    __lines: list[str] = []
+
+    @staticmethod
+    def log(message: str) -> None:
+        '''Logs a message'''
+        Logger.__lines.append(message)
+
+    @staticmethod
+    def save(filename: str) -> None:
+        '''Saves the log to a file'''
+        with open(filename, 'w', encoding='UTF+8') as file:
+            for line in Logger.__lines:
+                file.write(line + '\n')
+        Logger.__lines = []
