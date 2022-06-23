@@ -6,7 +6,7 @@ import json
 import math
 import time
 from simple_pid import PID
-from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, Logger, RobotState, State, Util
+from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, Logger, RobotInfo, RobotState, State, Util
 from rapid_react import RapidReactGameElementState
 
 
@@ -57,14 +57,19 @@ class RR67RobotState(RobotState):
     parts: list[Element]
 
     @staticmethod
-    def read(file: TextIOWrapper) -> 'RR67RobotState':
+    def read(file: TextIOWrapper) -> tuple['RR67RobotState', RobotInfo]:
         '''Returns the current state of the robot'''
         raw = file.read()
         raw = raw.strip()
         raw = json.loads(raw)
         elements: list[Element] = []
+        robot_info: RobotInfo
         for raw_object in raw['myrobot']:
-            elements.append(Element.from_json(raw_object))
+            element = Element.from_json(raw_object)
+            if isinstance(element, RobotInfo):
+                robot_info = element
+            else:
+                elements.append(element)
         body = None
         hood = None
         left_intake = None
@@ -101,7 +106,7 @@ class RR67RobotState(RobotState):
             climber_arm_1, climber_arm_2,
             climber_hook_1, climber_hook_2,
             parts
-        )
+        ), robot_info
 
     def intake_position(self, side: IntakeSide) -> IntakePosition:
         '''Returns the position of the intake'''
@@ -120,7 +125,7 @@ class RR67State(State):
     elements: RapidReactGameElementState
     game: GameState
     gamepad: GamepadState
-    alliance: Alliance
+    robot_info: RobotInfo
     __distance_to_hub: float = None
     __angle_from_hub: float = None
     __angle_to_hub: float = None
@@ -130,15 +135,14 @@ class RR67State(State):
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad,
-            alliance: Alliance) -> 'RR67State':
+            robot_file: TextIOWrapper, gamepad: Gamepad) -> 'RR67State':
         '''Reads the current state from the files'''
         try:
             game_state = GameState.read(game_file)
             element_state = RapidReactGameElementState.read(element_file)
-            robot_state = RR67RobotState.read(robot_file)
+            robot_state, robot_info = RR67RobotState.read(robot_file)
             gamepad_state = gamepad.read()
-            return RR67State(robot_state, element_state, game_state, gamepad_state, alliance)
+            return RR67State(robot_state, element_state, game_state, gamepad_state, robot_info)
         except json.JSONDecodeError:
             return None # Error reading file, try again
         except ValueError:
@@ -169,7 +173,7 @@ class RR67State(State):
 
     def __alliance_cargo_search(self) -> None:
         '''Find the angle & distance to nearest cargo, nearest intake, and # of cargo in robot'''
-        if self.alliance == Alliance.BLUE:
+        if self.robot_info.alliance == Alliance.BLUE:
             alliance_cargo = self.elements.blue_cargo
         else:
             alliance_cargo = self.elements.red_cargo
@@ -381,11 +385,11 @@ class IntakeCommand(RR67Command):
         body_position = state.robot.body.global_position
         if state.game.phase in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
             # Keep both intakes up in the hangar in endgame
-            if (state.alliance == Alliance.RED
+            if (state.robot_info.alliance == Alliance.RED
                     and body_position.x < -0.875 and body_position.z < -4.5):
                 target_left_intake = IntakePosition.UP
                 target_right_intake = IntakePosition.UP
-            elif (state.alliance == Alliance.BLUE
+            elif (state.robot_info.alliance == Alliance.BLUE
                     and body_position.x > 0.875 and body_position.z > 4.5):
                 target_left_intake = IntakePosition.UP
                 target_right_intake = IntakePosition.UP
@@ -492,11 +496,11 @@ class ClimberCommand(RR67Command):
         # Extend arms when in hangar during endgame
         body_position = state.robot.body.global_position
         if state.game.phase in [GamePhase.READY, GamePhase.ENDGAME, GamePhase.FINISHED]:
-            if (state.alliance == Alliance.RED
+            if (state.robot_info.alliance == Alliance.RED
                 and body_position.x < -0.875 and body_position.z < -4.5):
                 target_angle = 65
                 controls.climber_extend = True
-            elif (state.alliance == Alliance.BLUE
+            elif (state.robot_info.alliance == Alliance.BLUE
                   and body_position.x > 0.875 and body_position.z > 4.5):
                 target_angle = 65
                 controls.climber_extend = True
@@ -548,10 +552,9 @@ class RR67AutomationProvider(AutomationProvider):
         )
 
     def __call__(self, game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad,
-            alliance: Alliance) -> None:
+            robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
         '''Execute'''
-        state = RR67State.read(game_file, element_file, robot_file, gamepad, alliance)
+        state = RR67State.read(game_file, element_file, robot_file, gamepad)
         if state is None:
             return
         control_outputs = RR67Controls.from_gamepad_state(state.gamepad)

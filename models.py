@@ -40,6 +40,27 @@ class Vector:
         return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
 
 
+class Alliance(Enum):
+    '''Represents the alliance of the robot'''
+    RED = 0
+    BLUE = 1
+
+
+class DriverstationPosition(Enum):
+    '''Represents the driverstation position'''
+    LEFT = 0
+    CENTER = 1
+    RIGHT = 2
+
+
+@dataclass
+class RobotInfo:
+    alliance: Alliance
+    position: DriverstationPosition
+    robot: str
+    counter: int
+
+
 @dataclass
 class Element:
     '''Represents a game element'''
@@ -54,7 +75,7 @@ class Element:
     angular_velocity: Vector | None
 
     @staticmethod
-    def from_json(data: dict[str, any]) -> 'Element':
+    def from_json(data: dict[str, any]) -> 'Element | RobotInfo':
         '''Creates a game element from a JSON dictionary'''
         identifier = None
         element_type = None
@@ -77,6 +98,34 @@ class Element:
             name = data['name']
         except KeyError:
             pass
+        if name == 'INFO':
+            alliance = None
+            position = None
+            robot = None
+            counter = None
+            try:
+                position = data['Position']
+                position = position.split(' ')
+                match(position[0]):
+                    case 'Red': alliance = Alliance.RED
+                    case 'Blue': alliance = Alliance.BLUE
+                    case _: pass
+                match(position[1]):
+                    case 'Left': position = DriverstationPosition.LEFT
+                    case 'Center': position = DriverstationPosition.CENTER
+                    case 'Right': position = DriverstationPosition.RIGHT
+                    case _: pass
+            except KeyError:
+                pass
+            try:
+                robot = data['Model']
+            except KeyError:
+                pass
+            try:
+                counter = int(data['Counter'])
+            except (KeyError, ValueError):
+                pass
+            return RobotInfo(alliance, position, robot, counter)
         try:
             global_position = Vector.from_json(data['global pos'])
         except KeyError:
@@ -107,12 +156,6 @@ class Element:
 
     def __str__(self) -> str:
         return f"{self.name} @ {self.global_position}"
-
-
-class Alliance(Enum):
-    '''Represents the alliance of the robot'''
-    RED = 0
-    BLUE = 1
 
 
 class GamePhase(Enum):
@@ -289,9 +332,9 @@ class RobotState:
     '''Represents the current state of a robot'''
 
     @staticmethod
-    def read(file: TextIOWrapper) -> 'RobotState':
+    def read(file: TextIOWrapper) -> tuple['RobotState', RobotInfo]:
         '''Returns the current state of the robot'''
-        return RobotState()
+        return RobotState(), RobotInfo(None, None, None, None)
 
 
 @dataclass
@@ -301,14 +344,13 @@ class State:
     elements: GameElementState
     game: GameState
     gamepad: GamepadState
-    alliance: Alliance
+    robot_info: RobotInfo
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad,
-            alliance: Alliance) -> 'State':
+            robot_file: TextIOWrapper, gamepad: Gamepad) -> 'State':
         '''Reads the current state from the files'''
-        return State(None, None, None, None, alliance)
+        return State(None, None, None, None, None)
 
 
 @dataclass
@@ -337,8 +379,7 @@ class AutomationProvider:
 
     def __call__(self,
             game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad,
-            alliance: Alliance) -> None:
+            robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
         '''Applies automation to the current game'''
 
 
