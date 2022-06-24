@@ -13,7 +13,7 @@ AUTOMATION: AutomationProvider = RR67AutomationProvider()
 if __name__ == '__main__':
     gamepad = Gamepad()
 
-    Logger.log('Timestamp,Current,Error,Output')
+    Logger.log('Timestamp,Current,Error,Output,P,I,D')
     while True:
         start = time.time()
         with (open('GAME_STATE.txt', 'rt', encoding='UTF+8') as game_file,

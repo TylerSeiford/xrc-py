@@ -5,7 +5,7 @@ from io import TextIOWrapper
 import json
 import math
 import time
-from simple_pid import PID
+from cached_pid import PID
 from models import AutomationProvider, Command, Controls, Element, Alliance, GamePhase, GameState, GamepadState, Gamepad, ControlOutput, Logger, RobotInfo, RobotState, State, Util
 from rapid_react import RapidReactGameElementState
 
@@ -310,7 +310,7 @@ class RotationCommand(RR67Command):
 
     def __init__(self):
         super().__init__()
-        self.__pid = PID(-0.022, -0.000, -0.002, setpoint=0, output_limits=(-1, 1))
+        self.__pid = PID(-0.022, -0.000, -0.010, setpoint=0, dt=0.1, output_limits=(-1, 1))
 
     def __call__(self, state: RR67State, controls: RR67Controls) -> RR67Controls:
         '''Execute'''
@@ -327,7 +327,10 @@ class RotationCommand(RR67Command):
                 f"{datetime.isoformat(datetime.now())},"
                 f"{state.robot.body.global_rotation.y + 90},"
                 f"{angle_to_hub},"
-                f"{rotation}"
+                f"{rotation},"
+                f"{self.__pid._pid._proportional},"
+                f"{self.__pid._pid._integral},"
+                f"{self.__pid._pid._derivative}"
             )
         elif state.gamepad.bumper_left:
             # Turn to cargo
