@@ -134,4 +134,5 @@ GAME_STATE.txt
 GameElements.txt
 myRobot.txt
 reference/
-log.*
+log.csv
+*.xlsx
