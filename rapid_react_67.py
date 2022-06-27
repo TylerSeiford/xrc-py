@@ -162,6 +162,7 @@ class RR67State(State):
         if self.__angle_from_hub is None:
             self.__angle_from_hub = math.degrees(math.atan2(self.robot.body.global_position.x,
                     self.robot.body.global_position.z))
+        self.__angle_from_hub = Util.fix_angle(self.__angle_from_hub)
         return self.__angle_from_hub
 
     def angle_to_hub(self) -> float:
@@ -325,7 +326,7 @@ class RotationCommand(RR67Command):
             rotation = self.__pid(angle_to_hub)
             Logger.log(
                 f"{datetime.isoformat(datetime.now())},"
-                f"{state.robot.body.global_rotation.y + 90},"
+                f"{state.robot.body.global_rotation.y},"
                 f"{angle_to_hub},"
                 f"{rotation},"
                 f"{self.__pid._pid._proportional},"

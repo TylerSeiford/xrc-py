@@ -132,6 +132,9 @@ class Element:
             pass
         try:
             global_rotation = Vector.from_json(data['global rot'])
+            global_rotation.x = Util.fix_angle(global_rotation.x)
+            global_rotation.y = Util.fix_angle(global_rotation.y)
+            global_rotation.z = Util.fix_angle(global_rotation.z)
         except KeyError:
             pass
         try:
@@ -140,6 +143,9 @@ class Element:
             pass
         try:
             local_rotation = Vector.from_json(data['local rot'])
+            local_rotation.x = Util.fix_angle(local_rotation.x)
+            local_rotation.y = Util.fix_angle(local_rotation.y)
+            local_rotation.z = Util.fix_angle(local_rotation.z)
         except KeyError:
             pass
         try:
