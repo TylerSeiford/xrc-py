@@ -4,7 +4,6 @@ import json
 from models import Element, GameElementState
 
 
-
 @dataclass
 class ChargedUpGameElementState(GameElementState):
     '''Represents the current state of the rapid react game'''
@@ -27,9 +26,9 @@ class ChargedUpGameElementState(GameElementState):
         for element in elements:
             if element.element_type is None:
                 misc.append(element)
-            elif 'Cone' in element.name:
+            elif ChargedUpGameElementState.is_cone(element):
                 cones.append(element)
-            elif 'Cube' in element.name:
+            elif ChargedUpGameElementState.is_cube(element):
                 cubes.append(element)
             else:
                 misc.append(element)
@@ -41,3 +40,11 @@ class ChargedUpGameElementState(GameElementState):
         return f"{[str(item) for item in self.cones]}\n" \
             f"{[str(item) for item in self.cubes]}\n" \
             f"{[str(item) for item in self.misc]}"
+
+    @staticmethod
+    def is_cone(element: Element) -> bool:
+        return 'Cone' in element.name
+
+    @staticmethod
+    def is_cube(element: Element) -> bool:
+        return 'Cube' in element.name

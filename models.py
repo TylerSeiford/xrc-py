@@ -30,6 +30,9 @@ class Vector:
     def __sub__(self, other: 'Vector') -> 'Vector':
         return Vector(self.x - other.x, self.y - other.y, self.z - other.z)
 
+    def __truediv__(self, other: float) -> 'Vector':
+        return Vector(self.x / other, self.y / other, self.z / other)
+
     def __pos__(self) -> 'Vector':
         return Vector(+self.x, +self.y, +self.z)
 

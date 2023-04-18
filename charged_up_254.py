@@ -101,8 +101,7 @@ class CU254State(State):
     game: GameState
     gamepad: GamepadState
     robot_info: RobotInfo
-    _nearest_element: Element = None
-    _element_in_robot: list[Element] = None
+    _elements_in_intake: list[Element] = None
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
@@ -120,25 +119,30 @@ class CU254State(State):
             return None  # Error reading file, try again
 
     def __element_search(self):
-        self._nearest_element = Util.nearest_element(
-            self.robot.body.global_position, self.elements,
-            0.4, -0.5
-        )
-        self._element_in_robot = Util.elements_within(
-            self.robot.body.global_position,
-            self.elements,
-            0.4
+        # TODO: This does not find stuff in the intake well
+        body_position = self.robot.body.global_position
+        nearest = Util.nearest_element(
+            body_position,
+            self.elements.cones + self.elements.cubes,
+            0.0,
+            -1.0
         )
 
-    def element_in_robot(self) -> list[Element]:
-        if self._element_in_robot is None:
-            self.__element_search()
-        return self._element_in_robot
+        intake_position = body_position
+        intake_position += self.robot.lift.local_position
+        intake_position += self.robot.slide.local_position
+        print(f"{intake_position} {nearest.global_position} {abs(intake_position - nearest.global_position)}")
 
-    def nearest_element(self) -> Element:
-        if self._nearest_element is None:
+        self._elements_in_intake = Util.elements_within(
+            intake_position,
+            self.elements.cones + self.elements.cubes,
+            0.2
+        )
+
+    def elements_in_intake(self) -> list[Element]:
+        if self._elements_in_intake is None:
             self.__element_search()
-        return self._nearest_element
+        return self._elements_in_intake
 
 
 @dataclass
@@ -226,6 +230,8 @@ class ArmCommand(CU254Command):
         self.__bumper_left = False
         self.__ground_override = False
         self.__bumper_right = False
+        self.__cone = True
+        self.__dpad_left = False
 
     def _in_loading_zone(self, alliance: Alliance, position: Vector) -> bool:
         match (alliance):
@@ -271,6 +277,33 @@ class ArmCommand(CU254Command):
     def _stow(self) -> tuple[float, float]:
         return 0.130, 0.287
 
+    def _double_substation(self) -> tuple[float, float]:
+        return 0.858, 0.343
+
+    def _high(self, cone: bool, cube: bool) -> tuple[float, float]:
+        if cone:
+            return 0.978, 0.424
+        elif cube:
+            return 0.811, 0.378
+        else:
+            return self._ground_pickup()
+
+    def _mid(self, cone: bool, cube: bool) -> tuple[float, float]:
+        if cone:
+            return 0.811, 0.378
+        elif cube:
+            return 0.590, 0.325
+        else:
+            return self._ground_pickup()
+
+    def _low(self, cone: bool, cube: bool) -> tuple[float, float]:
+        if cone:
+            return 0.140, 0.332
+        elif cube:
+            return 0.140, 0.332
+        else:
+            return self._ground_pickup()
+
     def __call__(self, state: CU254State, controls: CU254Controls) -> CU254Controls:
         '''Execute'''
         # Update modes
@@ -312,6 +345,22 @@ class ArmCommand(CU254Command):
         else:
             if self.__bumper_right:
                 self.__bumper_right = False
+        if state.gamepad.dpad_left:
+            if not self.__dpad_left:
+                if self.__cone:
+                    self.__cone = False
+                    print('CUBE')
+                else:
+                    self.__cone = True
+                    print('CONE')
+                self.__dpad_left = True
+        else:
+            if self.__dpad_left:
+                self.__dpad_left = False
+
+        # See what element we have (TODO)
+        cone = self.__cone
+        cube = not cone
 
         body_position = state.robot.body.global_position
         target_elevator = 0
@@ -325,22 +374,18 @@ class ArmCommand(CU254Command):
                 # Go to pickup position when in the loading zone
                 match self.__pickup_mode:
                     case ArmCommand.PickupMode.DOUBLE_SUBSTATION:
-                        target_elevator = 0.858
-                        target_slider = 0.343
+                        target_elevator, target_slider = self._double_substation()
                     case ArmCommand.PickupMode.GROUND:
                         target_elevator, target_slider = self._ground_pickup()
             elif self._in_community(state.robot_info.alliance, body_position):
                 # Go to placement position when in community
                 match self.__place_mode:
                     case ArmCommand.PlaceMode.HIGH:
-                        target_elevator = 0.978
-                        target_slider = 0.424
+                        target_elevator, target_slider = self._high(cone, cube)
                     case ArmCommand.PlaceMode.MID:
-                        target_elevator = 0.811
-                        target_slider = 0.378
+                        target_elevator, target_slider = self._mid(cone, cube)
                     case ArmCommand.PlaceMode.LOW:
-                        target_elevator = 0.140
-                        target_slider = 0.332
+                        target_elevator, target_slider = self._low(cone, cube)
             else:
                 # Stay stowed when outside
                 target_elevator, target_slider = self._stow()
@@ -370,6 +415,7 @@ class ArmCommand(CU254Command):
         controls.mid_arm = False
         controls.stow_arm = False
         controls.station_arm = False
+        # print(f"{elevator_height:.3f} {slider_height:.3f}")
         return controls
 
 
