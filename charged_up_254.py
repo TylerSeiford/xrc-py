@@ -10,7 +10,6 @@ from models import AutomationProvider, Command, Controls, Element, Alliance, Gam
 from charged_up import ChargedUpGameElementState
 
 
-
 @dataclass
 class CU254RobotState(RobotState):
     '''Represents the current state of a robot'''
@@ -105,7 +104,7 @@ class CU254State(State):
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad) -> 'CU254State':
+             robot_file: TextIOWrapper, gamepad: Gamepad) -> 'CU254State':
         '''Reads the current state from the files'''
         try:
             game_state = GameState.read(game_file)
@@ -114,10 +113,9 @@ class CU254State(State):
             gamepad_state = gamepad.read()
             return CU254State(robot_state, element_state, game_state, gamepad_state, robot_info)
         except json.JSONDecodeError:
-            return None # Error reading file, try again
+            return None  # Error reading file, try again
         except ValueError:
-            return None # Error reading file, try again
-
+            return None  # Error reading file, try again
 
 
 @dataclass
@@ -147,12 +145,12 @@ class CU254Controls(Controls):
     def from_gamepad_state(gamepad: GamepadState) -> 'CU254Controls':
         '''Returns the default controls'''
         return CU254Controls(gamepad.a, gamepad.b, gamepad.x, gamepad.y,
-                gamepad.dpad_down, gamepad.dpad_up, gamepad.dpad_right, gamepad.dpad_left,
-                gamepad.bumper_left, gamepad.bumper_right,
-                gamepad.start, gamepad.back,
-                gamepad.right_y, gamepad.right_x,
-                gamepad.left_y, gamepad.left_x,
-                gamepad.trigger_left, gamepad.trigger_right)
+                             gamepad.dpad_down, gamepad.dpad_up, gamepad.dpad_right, gamepad.dpad_left,
+                             gamepad.bumper_left, gamepad.bumper_right,
+                             gamepad.start, gamepad.back,
+                             gamepad.right_y, gamepad.right_x,
+                             gamepad.left_y, gamepad.left_x,
+                             gamepad.trigger_left, gamepad.trigger_right)
 
     def write(self) -> None:
         '''Default controls for the robot'''
@@ -172,13 +170,13 @@ class CU254Controls(Controls):
 
 class CU254Command(Command):
     '''Represents a command to modify the controls for the robot'''
+
     def __init__(self):
         pass
 
     def __call__(self, state: CU254State, controls: CU254Controls) -> CU254Controls:
         '''Executes the command'''
         return controls
-
 
 
 class ArmCommand(CU254Command):
@@ -189,12 +187,19 @@ class ArmCommand(CU254Command):
         HIGH = 0
         MID = 1
         LOW = 2
-        
+
+    class PickupMode(Enum):
+        '''Represents the mode'''
+        DOUBLE_SUBSTATION = 0
+        SINGLE_SUBSTATION = 1
+        GROUND = 2
 
     def __init__(self):
         super().__init__()
-        self.__pid = PID(-5.000, 0.000, 0.000, setpoint=0, output_limits=(-1, 1))
+        self.__pid = PID(-5.000, 0.000, 0.000, setpoint=0,
+                         output_limits=(-1, 1))
         self.__place_mode = ArmCommand.PlaceMode.LOW
+        self.__pickup_mode = ArmCommand.PickupMode.DOUBLE_SUBSTATION
 
     def _in_loading_zone(self, alliance: Alliance, position: Vector) -> bool:
         match (alliance):
@@ -234,6 +239,9 @@ class ArmCommand(CU254Command):
             case _:
                 return False
 
+    def _ground_pickup(self) -> tuple[float, float]:
+        return 0.000, 0.332
+
     def __call__(self, state: CU254State, controls: CU254Controls) -> CU254Controls:
         '''Execute'''
         # Update mode
@@ -253,13 +261,19 @@ class ArmCommand(CU254Command):
 
         if controls.bumper_right:
             # Override to intake from ground
-            target_elevator = 0.000
-            target_slider = 0.332
+            target_elevator, target_slider = self._ground_pickup()
         else:
             if self._in_loading_zone(state.robot_info.alliance, body_position):
-                # Go to substation position when in the loading zone
-                target_elevator = 0.858
-                target_slider = 0.343
+                # Go to pickup position when in the loading zone
+                match self.__pickup_mode:
+                    case ArmCommand.PickupMode.DOUBLE_SUBSTATION:
+                        target_elevator = 0.858
+                        target_slider = 0.343
+                    case ArmCommand.PickupMode.SINGLE_SUBSTATION:
+                        target_elevator = 0.43
+                        target_slider = 0.34
+                    case ArmCommand.PickupMode.GROUND:
+                        target_elevator, target_slider = self._ground_pickup()
             elif self._in_community(state.robot_info.alliance, body_position):
                 # Go to placement position when in community
                 match (self.__place_mode):
@@ -305,7 +319,6 @@ class ArmCommand(CU254Command):
         return controls
 
 
-
 class CU254AutomationProvider(AutomationProvider):
     '''Automated control of the Rapid React 67 robot'''
 
@@ -316,7 +329,7 @@ class CU254AutomationProvider(AutomationProvider):
         )
 
     def __call__(self, game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
+                 robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
         '''Execute'''
         state = CU254State.read(game_file, element_file, robot_file, gamepad)
         if state is None:
