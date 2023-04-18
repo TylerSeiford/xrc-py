@@ -1,12 +1,12 @@
 import time
 import keyboard
 from models import AutomationProvider, Gamepad, Logger
-from rapid_react_67 import RR67AutomationProvider
+from charged_up_254 import CU254AutomationProvider
 
 
 
 FPS: float = 240
-AUTOMATION: AutomationProvider = RR67AutomationProvider()
+AUTOMATION: AutomationProvider = CU254AutomationProvider()
 
 
 
