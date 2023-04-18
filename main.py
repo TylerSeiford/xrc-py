@@ -1,11 +1,11 @@
 import time
 import keyboard
-from models import Alliance, AutomationProvider, Gamepad, Logger
+from models import AutomationProvider, Gamepad, Logger
 from rapid_react_67 import RR67AutomationProvider
 
 
 
-FPS: float = 100
+FPS: float = 240
 AUTOMATION: AutomationProvider = RR67AutomationProvider()
 
 

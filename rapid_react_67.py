@@ -324,15 +324,15 @@ class RotationCommand(RR67Command):
         if state.gamepad.bumper_right:
             # Turn to hub
             rotation = self.__pid(angle_to_hub)
-            Logger.log(
-                f"{datetime.isoformat(datetime.now())},"
-                f"{state.robot.body.global_rotation.y},"
-                f"{angle_to_hub},"
-                f"{rotation},"
-                f"{self.__pid._pid._proportional},"
-                f"{self.__pid._pid._integral},"
-                f"{self.__pid._pid._derivative}"
-            )
+            # Logger.log(
+            #     f"{datetime.isoformat(datetime.now())},"
+            #     f"{state.robot.body.global_rotation.y},"
+            #     f"{angle_to_hub},"
+            #     f"{rotation},"
+            #     f"{self.__pid._pid._proportional},"
+            #     f"{self.__pid._pid._integral},"
+            #     f"{self.__pid._pid._derivative}"
+            # )
         elif state.gamepad.bumper_left:
             # Turn to cargo
             rotation = self.__pid(angle_to_nearest_cargo)
