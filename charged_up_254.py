@@ -101,6 +101,8 @@ class CU254State(State):
     game: GameState
     gamepad: GamepadState
     robot_info: RobotInfo
+    _nearest_element: Element = None
+    _element_in_robot: list[Element] = None
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
@@ -116,6 +118,27 @@ class CU254State(State):
             return None  # Error reading file, try again
         except ValueError:
             return None  # Error reading file, try again
+
+    def __element_search(self):
+        self._nearest_element = Util.nearest_element(
+            self.robot.body.global_position, self.elements,
+            0.4, -0.5
+        )
+        self._element_in_robot = Util.elements_within(
+            self.robot.body.global_position,
+            self.elements,
+            0.4
+        )
+
+    def element_in_robot(self) -> list[Element]:
+        if self._element_in_robot is None:
+            self.__element_search()
+        return self._element_in_robot
+
+    def nearest_element(self) -> Element:
+        if self._nearest_element is None:
+            self.__element_search()
+        return self._nearest_element
 
 
 @dataclass
@@ -191,15 +214,18 @@ class ArmCommand(CU254Command):
     class PickupMode(Enum):
         '''Represents the mode'''
         DOUBLE_SUBSTATION = 0
-        SINGLE_SUBSTATION = 1
-        GROUND = 2
+        GROUND = 1
 
     def __init__(self):
         super().__init__()
         self.__pid = PID(-5.000, 0.000, 0.000, setpoint=0,
                          output_limits=(-1, 1))
         self.__place_mode = ArmCommand.PlaceMode.LOW
+        self.__dpad_up = False
         self.__pickup_mode = ArmCommand.PickupMode.DOUBLE_SUBSTATION
+        self.__bumper_left = False
+        self.__ground_override = False
+        self.__bumper_right = False
 
     def _in_loading_zone(self, alliance: Alliance, position: Vector) -> bool:
         match (alliance):
@@ -242,24 +268,56 @@ class ArmCommand(CU254Command):
     def _ground_pickup(self) -> tuple[float, float]:
         return 0.000, 0.332
 
+    def _stow(self) -> tuple[float, float]:
+        return 0.130, 0.287
+
     def __call__(self, state: CU254State, controls: CU254Controls) -> CU254Controls:
         '''Execute'''
-        # Update mode
-        if state.gamepad.dpad_up and self.__place_mode != ArmCommand.PlaceMode.HIGH:
-            self.__place_mode = ArmCommand.PlaceMode.HIGH
-            print(f"Switching to {self.__place_mode.name}")
-        elif state.gamepad.dpad_right and self.__place_mode != ArmCommand.PlaceMode.MID:
-            self.__place_mode = ArmCommand.PlaceMode.MID
-            print(f"Switching to {self.__place_mode.name}")
-        elif state.gamepad.dpad_down and self.__place_mode != ArmCommand.PlaceMode.LOW:
-            self.__place_mode = ArmCommand.PlaceMode.LOW
-            print(f"Switching to {self.__place_mode.name}")
+        # Update modes
+        if state.gamepad.dpad_up:
+            if not self.__dpad_up:
+                match self.__place_mode:
+                    case ArmCommand.PlaceMode.HIGH:
+                        self.__place_mode = ArmCommand.PlaceMode.LOW
+                    case ArmCommand.PlaceMode.MID:
+                        self.__place_mode = ArmCommand.PlaceMode.HIGH
+                    case ArmCommand.PlaceMode.LOW:
+                        self.__place_mode = ArmCommand.PlaceMode.MID
+                print(f"Switching to {self.__place_mode.name}")
+                self.__dpad_up = True
+        else:
+            if self.__dpad_up:
+                self.__dpad_up = False
+        if state.gamepad.bumper_left:
+            if not self.__bumper_left:
+                match self.__pickup_mode:
+                    case ArmCommand.PickupMode.DOUBLE_SUBSTATION:
+                        self.__pickup_mode = ArmCommand.PickupMode.GROUND
+                    case ArmCommand.PickupMode.GROUND:
+                        self.__pickup_mode = ArmCommand.PickupMode.DOUBLE_SUBSTATION
+                print(f"Switching to {self.__pickup_mode.name}")
+                self.__bumper_left = True
+        else:
+            if self.__bumper_left:
+                self.__bumper_left = False
+        if state.gamepad.bumper_right:
+            if not self.__bumper_right:
+                if self.__ground_override:
+                    self.__ground_override = False
+                    print('Disabling GROUND OVERRIDE')
+                else:
+                    self.__ground_override = True
+                    print('Enabling GROUND OVERRIDE')
+                self.__bumper_right = True
+        else:
+            if self.__bumper_right:
+                self.__bumper_right = False
 
         body_position = state.robot.body.global_position
         target_elevator = 0
         target_slider = 0
 
-        if controls.bumper_right:
+        if self.__ground_override:
             # Override to intake from ground
             target_elevator, target_slider = self._ground_pickup()
         else:
@@ -269,14 +327,11 @@ class ArmCommand(CU254Command):
                     case ArmCommand.PickupMode.DOUBLE_SUBSTATION:
                         target_elevator = 0.858
                         target_slider = 0.343
-                    case ArmCommand.PickupMode.SINGLE_SUBSTATION:
-                        target_elevator = 0.43
-                        target_slider = 0.34
                     case ArmCommand.PickupMode.GROUND:
                         target_elevator, target_slider = self._ground_pickup()
             elif self._in_community(state.robot_info.alliance, body_position):
                 # Go to placement position when in community
-                match (self.__place_mode):
+                match self.__place_mode:
                     case ArmCommand.PlaceMode.HIGH:
                         target_elevator = 0.978
                         target_slider = 0.424
@@ -288,8 +343,7 @@ class ArmCommand(CU254Command):
                         target_slider = 0.332
             else:
                 # Stay stowed when outside
-                target_elevator = 0.130
-                target_slider = 0.287
+                target_elevator, target_slider = self._stow()
 
         # Control elevator position
         elevator_height = state.robot.lift.local_position.y
