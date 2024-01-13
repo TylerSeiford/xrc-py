@@ -59,10 +59,10 @@ class CU254RobotState(RobotState):
                 body = element
             elif 'NotUpdated' in element.name:
                 not_updated = element
-            elif 'Slide' in element.name:
-                slide = element
             elif 'Slide2' in element.name:
                 slide_2 = element
+            elif 'Slide' in element.name:
+                slide = element
             elif 'Intake1' in element.name:
                 intake_1 = element
             elif 'Intake2' in element.name:
@@ -119,8 +119,8 @@ class CU254State(State):
             return None  # Error reading file, try again
 
     def __element_search(self):
-        # TODO: This does not find stuff in the intake well
         body_position = self.robot.body.global_position
+        body_rotation = self.robot.body.global_rotation
         nearest = Util.nearest_element(
             body_position,
             self.elements.cones + self.elements.cubes,
@@ -128,13 +128,44 @@ class CU254State(State):
             -1.0
         )
 
-        intake_position = body_position
-        intake_position += self.robot.lift.local_position
-        intake_position += self.robot.slide.local_position
-        print(f"{intake_position} {nearest.global_position} {abs(intake_position - nearest.global_position)}")
+        nearest_position = nearest.global_position
+        delta = nearest_position - body_position
+        lift_position = self.robot.lift.local_position
+        slide_position = self.robot.slide.local_position
+        slide_2_position = self.robot.slide_2.local_position
+        intake_1_position = self.robot.intake_1.local_position
+        intake_2_position = self.robot.intake_2.local_position
+        intake_3_position = self.robot.intake_3.local_position
+        intake_4_position = self.robot.intake_4.local_position
+        intake_average_position = (intake_1_position + intake_2_position +
+                           intake_3_position + intake_4_position) / 4
+        intake_rotated_position = intake_average_position.rotate(body_rotation.y)
+        lift_rotated_position = slide_position.rotate(body_rotation.y)
+        slide_rotated_position = slide_position.rotate(body_rotation.y)
+        slide_2_rotated_position = slide_2_position.rotate(body_rotation.y)
+        guess_position = intake_rotated_position + slide_rotated_position + slide_2_rotated_position + lift_rotated_position
+        Logger.log(
+            f"{body_position.x},{body_position.y},{body_position.z},"
+            f"{body_rotation.x},{body_rotation.y},{body_rotation.z},"
+            f"{nearest_position.x},{nearest_position.y},{nearest_position.z},"
+            f"{delta.x},{delta.y},{delta.z},{abs(delta)},"
+            f"{lift_position.x},{lift_position.y},{lift_position.z},{abs(lift_position)},"
+            f"{slide_position.x},{slide_position.y},{slide_position.z},{abs(slide_position)},"
+            f"{slide_2_position.x},{slide_2_position.y},{slide_2_position.z},{abs(slide_2_position)},"
+            f"{intake_1_position.x},{intake_1_position.y},{intake_1_position.z},{abs(intake_1_position)},"
+            f"{intake_2_position.x},{intake_2_position.y},{intake_2_position.z},{abs(intake_2_position)},"
+            f"{intake_3_position.x},{intake_3_position.y},{intake_3_position.z},{abs(intake_3_position)},"
+            f"{intake_4_position.x},{intake_4_position.y},{intake_4_position.z},{abs(intake_4_position)},"
+            f"{intake_average_position.x},{intake_average_position.y},{intake_average_position.z},{abs(intake_average_position)},"
+            f"{intake_rotated_position.x},{intake_rotated_position.y},{intake_rotated_position.z},{abs(intake_rotated_position)},"
+            f"{lift_rotated_position.x},{lift_rotated_position.y},{lift_rotated_position.z},{abs(lift_rotated_position)},"
+            f"{slide_rotated_position.x},{slide_rotated_position.y},{slide_rotated_position.z},{abs(slide_rotated_position)},"
+            f"{slide_2_rotated_position.x},{slide_2_rotated_position.y},{slide_2_rotated_position.z},{abs(slide_2_rotated_position)},"
+            f"{guess_position.x},{guess_position.y},{guess_position.z},{abs(guess_position)},"
+        )
 
         self._elements_in_intake = Util.elements_within(
-            intake_position,
+            intake_average_position,
             self.elements.cones + self.elements.cubes,
             0.2
         )
@@ -359,6 +390,7 @@ class ArmCommand(CU254Command):
                 self.__dpad_left = False
 
         # See what element we have (TODO)
+        state.elements_in_intake()
         cone = self.__cone
         cube = not cone
 
@@ -401,7 +433,7 @@ class ArmCommand(CU254Command):
                 controls.elevator_down = abs(control_output)
 
         # Control slider position
-        slider_height = state.robot.slide.local_position.y - elevator_height
+        slider_height = state.robot.slide_2.local_position.y - elevator_height
         if not controls.slide_out and not controls.slide_in:
             error = target_slider - slider_height
             if error > 0.01:

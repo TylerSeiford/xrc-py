@@ -4,16 +4,32 @@ from models import AutomationProvider, Gamepad, Logger
 from charged_up_254 import CU254AutomationProvider
 
 
-
 FPS: float = 240
 AUTOMATION: AutomationProvider = CU254AutomationProvider()
-
 
 
 if __name__ == '__main__':
     gamepad = Gamepad()
 
-    Logger.log('Timestamp,Current,Error,Output,P,I,D')
+    Logger.log(
+        'body global position,,,'
+        'body global rotation,,,'
+        'nearest global position,,,'
+        'delta,,,,'
+        'lift local position,,,,'
+        'slide local position,,,,'
+        'slide 2 local position,,,,'
+        'intake 1 local position,,,,'
+        'intake 2 local position,,,,'
+        'intake 3 local position,,,,'
+        'intake 4 local position,,,,'
+        'intake average position,,,,'
+        'intake rotated position,,,,'
+        'lift rotated position,,,,'
+        'slide rotated position,,,,'
+        'slide 2 rotated position,,,,'
+        'guess,,,,'
+    )
     while True:
         start = time.time()
         with (open('GAME_STATE.txt', 'rt', encoding='UTF+8') as game_file,

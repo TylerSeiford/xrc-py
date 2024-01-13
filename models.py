@@ -1,11 +1,10 @@
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
+import pygame
 from dataclasses import dataclass
 from enum import Enum
 from io import TextIOWrapper
 import math
-import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = ''
-import pygame
-
 
 
 # Base classes
@@ -20,6 +19,14 @@ class Vector:
     def from_json(data: list[float]) -> 'Vector':
         '''Creates a vector from a list of 3 floats'''
         return Vector(data[0], data[1], data[2])
+
+    def rotate(self, angle: float) -> 'Vector':
+        angle = math.radians(angle)
+        return Vector(
+            (math.cos(angle) * self.x - math.sin(angle) * self.z),
+            self.y,
+            -(math.sin(angle) * self.x + math.cos(angle) * self.z)
+        )
 
     def __str__(self) -> str:
         return f"<{self.x:.3f}, {self.y:.3f}, {self.z:.3f}>"
@@ -160,8 +167,8 @@ class Element:
         except KeyError:
             pass
         return Element(identifier, element_type, name,
-                global_position, global_rotation, local_position, local_rotation,
-                velocity, angular_velocity)
+                       global_position, global_rotation, local_position, local_rotation,
+                       velocity, angular_velocity)
 
     def __str__(self) -> str:
         return f"{self.name} @ {self.global_position}"
@@ -232,6 +239,7 @@ class GamepadState:
 
 class Gamepad:
     '''Represents the gamepad'''
+
     def __init__(self, stick: int = 0):
         try:
             pygame.init()
@@ -246,12 +254,12 @@ class Gamepad:
         '''Reads the current state from a joystick'''
         if self.__joystick is None:
             return GamepadState(
-                    False, False, False, False,
-                    False, False, False, False,
-                    False, False, False, False,
-                    0, 0,
-                    0, 0,
-                    0, 0
+                False, False, False, False,
+                False, False, False, False,
+                False, False, False, False,
+                0, 0,
+                0, 0,
+                0, 0
             )
         pygame.event.pump()
         dpad = self.__joystick.get_hat(0)
@@ -324,7 +332,6 @@ class ControlOutput:
             file.write(f"precision={self.precision}\n")
 
 
-
 # Generic classes
 @dataclass
 class GameElementState:
@@ -357,7 +364,7 @@ class State:
 
     @staticmethod
     def read(game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad) -> 'State':
+             robot_file: TextIOWrapper, gamepad: Gamepad) -> 'State':
         '''Reads the current state from the files'''
         return State(None, None, None, None, None)
 
@@ -387,8 +394,8 @@ class AutomationProvider:
     '''Abstract class to represent a full automation system'''
 
     def __call__(self,
-            game_file: TextIOWrapper, element_file: TextIOWrapper,
-            robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
+                 game_file: TextIOWrapper, element_file: TextIOWrapper,
+                 robot_file: TextIOWrapper, gamepad: Gamepad) -> None:
         '''Applies automation to the current game'''
 
 
@@ -407,7 +414,7 @@ class Util:
 
     @staticmethod
     def nearest_element(position: Vector, elements: list[Element],
-            min_distance: float = 0, max_y: float = 0) -> Element:
+                        min_distance: float = 0, max_y: float = 0) -> Element:
         '''Returns the nearest element to the position'''
         nearest = None
         nearest_distance = float('inf')
@@ -415,9 +422,9 @@ class Util:
             difference = position - element.global_position
             distance = math.hypot(difference.x, difference.y, difference.z)
             if distance < min_distance:
-                pass # Element is too close
+                pass  # Element is too close
             elif difference.y < max_y:
-                pass # Element is too high
+                pass  # Element is too high
             elif distance < nearest_distance:
                 nearest = element
                 nearest_distance = distance
@@ -425,7 +432,7 @@ class Util:
 
     @staticmethod
     def elements_within(position: Vector, elements: list[Element],
-            distance: float) -> list[Element]:
+                        distance: float) -> list[Element]:
         '''Returns the elements within the distance'''
         result = []
         for element in elements:
